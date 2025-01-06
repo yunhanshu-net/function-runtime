@@ -2,7 +2,7 @@ package webx
 
 import (
 	"fmt"
-	"github.com/liu-cn/runbox/pkg/slicesx"
+	"github.com/yunhanshu-net/runcher/pkg/slicesx"
 	"golang.org/x/sync/errgroup"
 	"os"
 	"path/filepath"
