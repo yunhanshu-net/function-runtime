@@ -19,7 +19,7 @@ func TestParserHtmlTagContent(t *testing.T) {
 }
 func TestParserHtmlTagContent2(t *testing.T) {
 	content := `
-	<Logger>{"a_command":"hi","a_soft":"json","a_soft_classify":"/beiluo/json","a_tenant":"beiluo","level":"INFO","msg":"hello info log","stack":"D:/code/github.com/apphub/server/soft_cmd/beiluo/json/main.go:24","ts":1725606536}</Logger>
+	<Logger>{"a_command":"hi","a_soft":"json","a_soft_classify":"/beiluo/json","a_tenant":"beiluo","level":"INFO","msg":"hello info log","stack":"D:/code/github.com/apphub/kernel/soft_cmd/beiluo/json/main.go:24","ts":1725606536}</Logger>
 	<Response>{"status_code":200,"msg":"","content_type":"text","has_file":false,"path":"","delete_file":false,"data":"hello info res"}</Response>
 	<UserCost>0s</UserCost>
 `
@@ -42,7 +42,7 @@ func BenchmarkParserHtmlTagContent(b *testing.B) {
 func BenchmarkParserHtmlTagContent2(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		content := `
-	<Logger>{"a_command":"hi","a_soft":"json","a_soft_classify":"/beiluo/json","a_tenant":"beiluo","level":"INFO","msg":"hello info log","stack":"D:/code/github.com/apphub/server/soft_cmd/beiluo/json/main.go:24","ts":1725606536}</Logger>
+	<Logger>{"a_command":"hi","a_soft":"json","a_soft_classify":"/beiluo/json","a_tenant":"beiluo","level":"INFO","msg":"hello info log","stack":"D:/code/github.com/apphub/kernel/soft_cmd/beiluo/json/main.go:24","ts":1725606536}</Logger>
 	<Response>{"status_code":200,"msg":"","content_type":"text","has_file":false,"path":"","delete_file":false,"data":"hello info res"}</Response>
 	<UserCost>0s</UserCost>
 `

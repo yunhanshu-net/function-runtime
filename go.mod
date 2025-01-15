@@ -6,6 +6,7 @@ require (
 	github.com/mholt/archiver/v3 v3.5.1
 	github.com/natefinch/lumberjack v2.0.0+incompatible
 	github.com/nats-io/nats.go v1.38.0
+	github.com/otiai10/copy v1.14.1
 	github.com/qiniu/api.v7/v7 v7.8.2
 	github.com/sirupsen/logrus v1.9.3
 	golang.org/x/sync v0.10.0
@@ -22,6 +23,7 @@ require (
 	github.com/nats-io/nkeys v0.4.9 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/nwaples/rardecode v1.1.0 // indirect
+	github.com/otiai10/mint v1.6.3 // indirect
 	github.com/pierrec/lz4/v4 v4.1.2 // indirect
 	github.com/ulikunitz/xz v0.5.9 // indirect
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
