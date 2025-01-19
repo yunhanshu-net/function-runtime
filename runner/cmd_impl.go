@@ -11,6 +11,7 @@ import (
 	"github.com/yunhanshu-net/runcher/model/request"
 	"github.com/yunhanshu-net/runcher/model/response"
 	"github.com/yunhanshu-net/runcher/pkg/compress"
+	"github.com/yunhanshu-net/runcher/pkg/jsonx"
 	"github.com/yunhanshu-net/runcher/pkg/osx"
 	"github.com/yunhanshu-net/runcher/pkg/slicesx"
 	"github.com/yunhanshu-net/runcher/pkg/store"
@@ -202,13 +203,26 @@ Back:
 	return &response.UpdateVersion{}, nil
 }
 
-func (c *Cmd) Request(req *request.Request) (*response.Response, error) {
+func (c *Cmd) start() {
+
+}
+
+func (c *Cmd) keepAlive(req *request.Request) (*response.Response, error) {
+	return nil, nil
+}
+func (c *Cmd) request(req *request.Request) (*response.Response, error) {
 	var (
 		cmdStr    string
 		err       error
 		outString string
 		res       response.Response
 	)
+
+	req.RunnerInfo.WorkPath = c.GetInstallPath()              //软件安装目录
+	err = jsonx.SaveFile(req.RunnerInfo.RequestJsonPath, req) //todo 存储请求参数
+	if err != nil {
+		return nil, err
+	}
 	defer func() {
 		if err != nil {
 			logrus.Errorf("Cmd call err:%s exec:%s ", err, cmdStr)
@@ -221,25 +235,25 @@ func (c *Cmd) Request(req *request.Request) (*response.Response, error) {
 	appName := c.GetAppName()
 	softPath := fmt.Sprintf("%s/%s", installPath, appName)
 	softPath = strings.ReplaceAll(softPath, "\\", "/")
-	req.SoftInfo.RequestJsonPath = strings.ReplaceAll(req.SoftInfo.RequestJsonPath, "\\", "/")
+	req.RunnerInfo.RequestJsonPath = strings.ReplaceAll(req.RunnerInfo.RequestJsonPath, "\\", "/")
 	var cmd *exec.Cmd
-	split := strings.Split(req.SoftInfo.RequestJsonPath, "/")
+	split := strings.Split(req.RunnerInfo.RequestJsonPath, "/")
 	reqName := split[len(split)-1]
 	switch runtime.GOOS {
 	case "windows":
 		cc := fmt.Sprintf("cd /D %s && %s %s .request/%s",
-			installPath, appName, req.SoftInfo.Command, reqName)
+			installPath, appName, req.RunnerInfo.Command, reqName)
 		cmd = exec.Command("cmd.exe", "/C", cc)
 	case "linux", "darwin":
 		//cc := fmt.Sprintf("cd  %s && %s %s %s",
 		//	installPath, softPath, req.Command, req.RequestJsonPath)
 
 		cc := fmt.Sprintf("cd %s && ./%s %s .request/%s",
-			installPath, appName, req.SoftInfo.Command, reqName)
+			installPath, appName, req.RunnerInfo.Command, reqName)
 		// Linux和macOS可以直接使用 && 连接命令
 		cmd = exec.Command("sh", "-c", cc)
 	default:
-		cmd = exec.Command(softPath, req.SoftInfo.Command, req.SoftInfo.RequestJsonPath)
+		cmd = exec.Command(softPath, req.RunnerInfo.Command, req.RunnerInfo.RequestJsonPath)
 		fmt.Printf("cmd call err:%s exec:%s ", err, cmdStr)
 	}
 
@@ -252,7 +266,7 @@ func (c *Cmd) Request(req *request.Request) (*response.Response, error) {
 		logrus.Errorf("cmd run err:%s", err.Error())
 		return nil, err
 	}
-	cmdStr = fmt.Sprintf("%s %s %s", softPath, req.SoftInfo.Command, req.SoftInfo.RequestJsonPath)
+	cmdStr = fmt.Sprintf("%s %s %s", softPath, req.RunnerInfo.Command, req.RunnerInfo.RequestJsonPath)
 	logrus.Infof("Cmd run %s", cmdStr)
 	outString = out.String()
 	if outString == "" {
@@ -287,4 +301,30 @@ func (c *Cmd) Request(req *request.Request) (*response.Response, error) {
 	}
 	//p.printSoftLogs(s, since)
 	return &res, nil
+}
+func (c *Cmd) StartKeepAlive() error {
+	var cmd *exec.Cmd
+	userSoft := c.User + "/" + c.Name
+	switch runtime.GOOS {
+	case "windows":
+		cc := fmt.Sprintf("cd /D %s && %s _connect_ %s",
+			c.GetInstallPath(), c.GetAppName(), userSoft)
+		cmd = exec.Command("cmd.exe", "/C", cc)
+	case "linux", "darwin":
+		//cc := fmt.Sprintf("cd  %s && %s %s %s",
+		//	installPath, softPath, req.Command, req.RequestJsonPath)
+
+		cc := fmt.Sprintf("cd %s && ./%s _connect_ %s",
+			c.GetInstallPath(), c.GetAppName(), userSoft)
+		// Linux和macOS可以直接使用 && 连接命令
+		cmd = exec.Command("sh", "-c", cc)
+	}
+	return nil
+}
+
+func (c *Cmd) Request(req *request.Request) (*response.Response, error) {
+	if req.IsRunning {
+		return c.keepAlive(req)
+	}
+
 }

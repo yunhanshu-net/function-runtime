@@ -42,4 +42,5 @@ type Runner interface {
 	UpdateVersion(up *model.UpdateVersion, fileStore store.FileStore) (*response.UpdateVersion, error)        //更新版本
 	RollbackVersion(r *request.RollbackVersion, fileStore store.FileStore) (*response.RollbackVersion, error) //版本回滚
 	Request(req *request.Request) (*response.Response, error)                                                 //运行程序
+	StartKeepAlive() error
 }

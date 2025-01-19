@@ -18,8 +18,8 @@ type FileCache interface {
 }
 
 type File struct {
-	filePath   string //存储的目标地址
-	expireTime int64  //到期需要移除的时间
+	FilePath   string //存储的目标地址
+	ExpireTime int64  //到期需要移除的时间
 
 }
 
@@ -46,12 +46,12 @@ func (c *LocalFileCache) check() {
 			return
 		case <-c.tk.C:
 			for s, file := range c.fileMap {
-				if file.expireTime == -1 {
+				if file.ExpireTime == -1 {
 					continue
 				}
-				if time.Now().Unix() > file.expireTime { //说明已经过期需要删除文件
+				if time.Now().Unix() > file.ExpireTime { //说明已经过期需要删除文件
 					c.mutex.Lock()
-					p := file.filePath
+					p := file.FilePath
 					logrus.Infof("删除文件：%s\n", p)
 					go osx.DeleteFileOrDir(p)
 					delete(c.fileMap, s)
@@ -91,7 +91,7 @@ func (c *LocalFileCache) Get(path string, addExpire time.Duration) (file *File, 
 	f, ok := c.fileMap[path]
 	if ok {
 		if addExpire.Microseconds() > 0 {
-			f.expireTime = time.Now().Add(addExpire).Unix()
+			f.ExpireTime = time.Now().Add(addExpire).Unix()
 		}
 	} else {
 		return nil, false
@@ -104,8 +104,8 @@ func (c *LocalFileCache) Set(path string, distPath string, ttl time.Duration) (c
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	f := File{
-		filePath:   distPath,
-		expireTime: time.Now().Add(ttl).Unix(),
+		FilePath:   distPath,
+		ExpireTime: time.Now().Add(ttl).Unix(),
 	}
 	_, ok := c.fileMap[path]
 	c.fileMap[path] = &f

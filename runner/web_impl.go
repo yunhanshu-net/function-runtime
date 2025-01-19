@@ -171,6 +171,9 @@ func (w *WebSite) UpdateVersion(up *model.UpdateVersion, fileStore store.FileSto
 	}
 	return &response.UpdateVersion{}, nil
 }
+func (w *WebSite) StartKeepAlive() error {
+	return nil
+}
 
 func (w *WebSite) Request(req *request.Request) (*response.Response, error) {
 	//TODO implement me
