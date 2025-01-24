@@ -13,7 +13,7 @@ type RollbackVersion struct {
 }
 
 func (c *Request) IsOpenCommand() bool {
-	return c.SoftInfo.Command == "_cloud_func" || c.SoftInfo.Command == "_docs_info_text"
+	return c.RunnerInfo.Command == "_cloud_func" || c.RunnerInfo.Command == "_docs_info_text"
 }
 
 func (c *Request) RequestJSON() (string, error) {
@@ -26,6 +26,6 @@ func (c *Request) RequestJSON() (string, error) {
 
 func (c *Request) GetRequestFilePath(callerPath string) string {
 	reqJson := callerPath + fmt.Sprintf("/.request/%v_%v.json",
-		c.SoftInfo.Soft, time.Now().UnixNano())
+		c.RunnerInfo.Soft, time.Now().UnixNano())
 	return reqJson
 }

@@ -2,6 +2,7 @@ package runner
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/nats-io/nats.go"
@@ -295,14 +296,14 @@ func (c *Cmd) request(req *request.Request) (*response.Response, error) {
 	since := time.Since(now)
 	res.MetaData["cost"] = since
 	res.MetaData["mem_b"] = int(i)
-	err = json.Unmarshal([]byte(outString), &res.SoftResponse)
+	err = json.Unmarshal([]byte(outString), &res.RunnerResponse)
 	if err != nil {
 		return nil, err
 	}
 	//p.printSoftLogs(s, since)
 	return &res, nil
 }
-func (c *Cmd) StartKeepAlive() error {
+func (c *Cmd) StartKeepAlive(ctx context.Context) error {
 	var cmd *exec.Cmd
 	userSoft := c.User + "/" + c.Name
 	switch runtime.GOOS {
@@ -319,6 +320,16 @@ func (c *Cmd) StartKeepAlive() error {
 		// Linux和macOS可以直接使用 && 连接命令
 		cmd = exec.Command("sh", "-c", cc)
 	}
+	if cmd == nil {
+		return fmt.Errorf("cmd is nil ")
+	}
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := cmd.Run()
+	if err != nil {
+		logrus.Errorf("cmd run err:%s", err.Error())
+		return err
+	}
 	return nil
 }
 
@@ -327,4 +338,5 @@ func (c *Cmd) Request(req *request.Request) (*response.Response, error) {
 		return c.keepAlive(req)
 	}
 
+	return c.request(req)
 }

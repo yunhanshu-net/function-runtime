@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"fmt"
 	"github.com/yunhanshu-net/runcher/model"
 	"github.com/yunhanshu-net/runcher/model/request"
@@ -171,7 +172,7 @@ func (w *WebSite) UpdateVersion(up *model.UpdateVersion, fileStore store.FileSto
 	}
 	return &response.UpdateVersion{}, nil
 }
-func (w *WebSite) StartKeepAlive() error {
+func (w *WebSite) StartKeepAlive(ctx context.Context) error {
 	return nil
 }
 

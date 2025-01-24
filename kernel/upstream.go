@@ -41,17 +41,17 @@ func (r *Runcher) upstreamFunc(msg *nats.Msg) {
 		ToolType:   msg.Header.Get("type"),
 		Version:    msg.Header.Get("version"),
 	}
-	req.SoftInfo.User = user
-	req.SoftInfo.Soft = soft
-	req.SoftInfo.Command = cmd
-	req.SoftInfo.Command = strings.TrimPrefix(req.SoftInfo.Command, "/")
+	req.RunnerInfo.User = user
+	req.RunnerInfo.Soft = soft
+	req.RunnerInfo.Command = cmd
+	req.RunnerInfo.Command = strings.TrimPrefix(req.RunnerInfo.Command, "/")
 	req.Method = msg.Header.Get("method")
 
 	run := runner.NewRunner(runnerMeta)
 
-	req.SoftInfo.RequestJsonPath = strings.ReplaceAll(req.GetRequestFilePath(run.GetInstallPath()), "\\", "/")
+	req.RunnerInfo.RequestJsonPath = strings.ReplaceAll(req.GetRequestFilePath(run.GetInstallPath()), "\\", "/")
 	defer func() {
-		go os.Remove(req.SoftInfo.RequestJsonPath)
+		go os.Remove(req.RunnerInfo.RequestJsonPath)
 	}()
 	rsp, err = r.executor.Request(&req, runnerMeta)
 	if err != nil {

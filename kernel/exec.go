@@ -1,11 +1,14 @@
 package kernel
 
 import (
+	"context"
+	"github.com/nats-io/nats.go"
 	"github.com/yunhanshu-net/runcher/model"
 	"github.com/yunhanshu-net/runcher/model/request"
 	"github.com/yunhanshu-net/runcher/model/response"
 	"github.com/yunhanshu-net/runcher/pkg/store"
 	"github.com/yunhanshu-net/runcher/runner"
+	"sync"
 	"time"
 )
 
@@ -13,6 +16,19 @@ import (
 type Executor struct {
 	FileStore    store.FileStore
 	runnerStatus map[string]*runnerStatus
+	nats         *nats.Conn
+	connectSub   *nats.Subscription
+	closeSub     *nats.Subscription
+
+	RuncherConnectLock *sync.Mutex
+	RuncherConnect     map[string]chan RunnerStatus
+	RuncherCloseLock   *sync.Mutex
+	RuncherClose       map[string]chan RunnerStatus
+}
+
+type RunnerStatus struct {
+	Success bool
+	Message string
 }
 
 type runnerStatus struct {
@@ -21,7 +37,14 @@ type runnerStatus struct {
 }
 
 func NewExecutor(fileStore store.FileStore) *Executor {
-	return &Executor{FileStore: fileStore}
+	return &Executor{
+		FileStore:          fileStore,
+		RuncherConnectLock: &sync.Mutex{},
+		RuncherCloseLock:   &sync.Mutex{},
+		runnerStatus:       make(map[string]*runnerStatus),
+		RuncherConnect:     make(map[string]chan RunnerStatus),
+		RuncherClose:       make(map[string]chan RunnerStatus),
+	}
 }
 
 func (b *Executor) startKeepAlive() {
@@ -40,8 +63,9 @@ func (b *Executor) Request(call *request.Request, runnerConf *model.Runner) (*re
 	if ok {
 		call.IsRunning = status.running
 	}
-	//todo 这里判断是否需要建立长连接
 
+	//todo 这里判断是否需要建立长连接
+	err := newRunner.StartKeepAlive(context.Background())
 	rspCall, err := newRunner.Request(call)
 	if err != nil {
 		return nil, err
@@ -67,4 +91,10 @@ func (b *Executor) UpdateVersion(updateRunner *model.UpdateVersion) (*response.U
 		return nil, err
 	}
 	return info, nil
+}
+
+func (b *Executor) Close() error {
+	b.closeSub.Unsubscribe()
+	b.connectSub.Unsubscribe()
+	return nil
 }
