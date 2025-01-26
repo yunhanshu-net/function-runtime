@@ -41,5 +41,9 @@ func NewDefaultRuncher() (*Runcher, error) {
 		fileOutCache:  filecache.NewLocalFileCache(),
 		executor:      NewExecutor(store.NewDefaultQiNiu()),
 	}
+	err = r.executor.RunnerListen()
+	if err != nil {
+		return nil, err
+	}
 	return r, nil
 }

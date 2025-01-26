@@ -32,9 +32,9 @@ func (b *Executor) RunnerListen() error {
 				return
 			}
 			if _, ok := b.RuncherConnect[fmt.Sprintf("%s.%s", user, runner)]; !ok {
-				b.RuncherConnect[fmt.Sprintf("%s.%s", user, runner)] = make(chan RunnerStatus, 1)
+				b.RuncherConnect[fmt.Sprintf("%s.%s", user, runner)] = make(chan ConnectStatus, 1)
 			}
-			b.RuncherConnect[fmt.Sprintf("%s.%s", user, runner)] <- RunnerStatus{Success: true}
+			b.RuncherConnect[fmt.Sprintf("%s.%s", user, runner)] <- ConnectStatus{Success: true}
 
 		}
 	})
@@ -56,9 +56,9 @@ func (b *Executor) RunnerListen() error {
 		runner := split[3]
 		if msg.Header.Get("status") == "0" {
 			if _, ok := b.RuncherClose[fmt.Sprintf("%s.%s", user, runner)]; !ok {
-				b.RuncherClose[fmt.Sprintf("%s.%s", user, runner)] = make(chan RunnerStatus, 1)
+				b.RuncherClose[fmt.Sprintf("%s.%s", user, runner)] = make(chan CloseStatus, 1)
 			}
-			b.RuncherClose[fmt.Sprintf("%s.%s", user, runner)] <- RunnerStatus{Success: true}
+			b.RuncherClose[fmt.Sprintf("%s.%s", user, runner)] <- CloseStatus{Success: true}
 		}
 	})
 	if err != nil {

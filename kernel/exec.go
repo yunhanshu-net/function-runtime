@@ -21,19 +21,46 @@ type Executor struct {
 	closeSub     *nats.Subscription
 
 	RuncherConnectLock *sync.Mutex
-	RuncherConnect     map[string]chan RunnerStatus
+	RuncherConnect     map[string]chan ConnectStatus
 	RuncherCloseLock   *sync.Mutex
-	RuncherClose       map[string]chan RunnerStatus
+	RuncherClose       map[string]chan CloseStatus
 }
 
-type RunnerStatus struct {
+type ConnectStatus struct {
+	Success bool
+	Message string
+}
+
+type CloseStatus struct {
 	Success bool
 	Message string
 }
 
 type runnerStatus struct {
-	running   bool
-	startTime time.Time
+	running         bool
+	waitExecRequest []*request.Request
+	startTime       time.Time
+	mu              *sync.Mutex // 用于并发安全
+}
+
+// Push 方法将请求添加到 waitExecRequest 切片中
+func (rs *runnerStatus) Push(req *request.Request) {
+	rs.mu.Lock()         // 锁定以确保并发安全
+	defer rs.mu.Unlock() // 解锁
+	rs.waitExecRequest = append(rs.waitExecRequest, req)
+}
+
+// Pop 方法从 waitExecRequest 切片中弹出一个请求
+func (rs *runnerStatus) Pop() *request.Request {
+	rs.mu.Lock()         // 锁定以确保并发安全
+	defer rs.mu.Unlock() // 解锁
+	if len(rs.waitExecRequest) == 0 {
+		return nil // 如果切片为空，返回 nil
+	}
+	// 获取最后一个请求并移除它
+	req := rs.waitExecRequest[len(rs.waitExecRequest)-1]
+	rs.waitExecRequest = rs.waitExecRequest[:len(rs.waitExecRequest)-1]
+	return req
 }
 
 func NewExecutor(fileStore store.FileStore) *Executor {
@@ -42,13 +69,29 @@ func NewExecutor(fileStore store.FileStore) *Executor {
 		RuncherConnectLock: &sync.Mutex{},
 		RuncherCloseLock:   &sync.Mutex{},
 		runnerStatus:       make(map[string]*runnerStatus),
-		RuncherConnect:     make(map[string]chan RunnerStatus),
-		RuncherClose:       make(map[string]chan RunnerStatus),
+		RuncherConnect:     make(map[string]chan ConnectStatus),
+		RuncherClose:       make(map[string]chan CloseStatus),
 	}
 }
 
 func (b *Executor) startKeepAlive() {
 
+}
+
+type RunnerStatus struct {
+	Running bool
+}
+
+func (b *Executor) RunnerStatus(runnerKey string) RunnerStatus {
+	status, ok := b.runnerStatus[runnerKey]
+	if ok {
+		return RunnerStatus{Running: status.running}
+	}
+	return RunnerStatus{}
+}
+
+func (b *Executor) ShouldStartKeepAlive() bool {
+	return false
 }
 
 // Request 执行请求
@@ -59,10 +102,11 @@ func (b *Executor) Request(call *request.Request, runnerConf *model.Runner) (*re
 	//if err != nil {
 	//	return nil, err
 	//}
-	status, ok := b.runnerStatus[call.RunnerInfo.Key()]
-	if ok {
-		call.IsRunning = status.running
-	}
+	//status, ok := b.runnerStatus[call.RunnerInfo.Key()]
+	//if ok {
+	//	call.IsRunning = status.running
+	//}
+	call.IsRunning = b.RunnerStatus(call.RunnerInfo.Key()).Running
 
 	//todo 这里判断是否需要建立长连接
 	err := newRunner.StartKeepAlive(context.Background())
