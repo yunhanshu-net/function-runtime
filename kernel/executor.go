@@ -6,17 +6,22 @@ import (
 	"sync"
 )
 
-type Executor struct {
-	Transports map[string]transport.Transport //传输层，可能存在多种不同的实现，有nats，grpc，socket 套接字，等等
-	Done       <-chan struct{}
-	RWMutex    *sync.RWMutex
-	Runners    map[string]map[int]*runtime.Runner //每个runner 可以有多个实例
+type RuntimeRunners struct {
+	RWMutex   *sync.RWMutex
+	Instances map[int]*runtime.Runner `json:"instances"`
 }
 
-func (r *Executor) GetRunners(subject string) (runners map[int]*runtime.Runner, exist bool) {
+type Executor struct {
+	Transports     map[string]transport.Transport //传输层，可能存在多种不同的实现，有nats，grpc，socket 套接字，等等
+	Done           <-chan struct{}
+	RWMutex        *sync.RWMutex
+	RuntimeRunners map[string]*RuntimeRunners //每个runner 可以有多个实例
+}
+
+func (r *Executor) GetRunners(subject string) (runners *RuntimeRunners, exist bool) {
 	r.RWMutex.RLock()
 	defer r.RWMutex.RUnlock()
-	runners, ok := r.Runners[subject]
+	runners, ok := r.RuntimeRunners[subject]
 	return runners, ok
 }
 
