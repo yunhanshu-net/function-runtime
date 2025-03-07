@@ -19,16 +19,16 @@ import (
 
 func NewWebSite(runner *model.Runner) *WebSite {
 	dir := "./web"
-	fullName := runner.AppCode
+	fullName := runner.Name
 	return &WebSite{
 		Host: "http://cdn.geeleo.com",
 		InstallInfo: response.InstallInfo{
 			TempPath:     filepath.Join(os.TempDir(), runner.ToolType),
 			RootPath:     dir,
 			StoreRoot:    runner.StoreRoot,
-			Name:         runner.AppCode,
+			Name:         runner.Name,
 			FullName:     fullName,
-			User:         runner.TenantUser,
+			User:         runner.User,
 			Version:      runner.Version,
 			DownloadPath: runner.OssPath,
 		},
@@ -38,6 +38,16 @@ func NewWebSite(runner *model.Runner) *WebSite {
 type WebSite struct {
 	Host string
 	response.InstallInfo
+}
+
+func (w *WebSite) Stop() error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (w *WebSite) GetInstance() interface{} {
+	//TODO implement me
+	panic("implement me")
 }
 
 // DeCompressPath 解压临时目录
@@ -176,7 +186,7 @@ func (w *WebSite) StartKeepAlive(ctx context.Context) error {
 	return nil
 }
 
-func (w *WebSite) Request(req *request.Request) (*response.Response, error) {
+func (w *WebSite) Request(req *request.RunnerRequest, ctx *Context) (*response.RunnerResponse, error) {
 	//TODO implement me
 	panic("implement me")
 }

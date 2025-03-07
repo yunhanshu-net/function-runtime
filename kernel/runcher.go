@@ -1,11 +1,8 @@
 package kernel
 
 import (
-	"fmt"
 	"github.com/nats-io/nats.go"
 	"github.com/yunhanshu-net/runcher/pkg/filecache"
-	"github.com/yunhanshu-net/runcher/pkg/natsx"
-	"github.com/yunhanshu-net/runcher/pkg/store"
 )
 
 type Runcher struct {
@@ -20,30 +17,9 @@ type Runcher struct {
 }
 
 func NewDefaultRuncher() (*Runcher, error) {
-
-	r := &Runcher{}
-	upstreamSubKey := fmt.Sprintf("runner.run.*.*.*")
-	upstreamSub, err := natsx.Nats.Subscribe(upstreamSubKey, r.upstreamFunc)
+	executor, err := NewDefaultExecutor()
 	if err != nil {
 		return nil, err
 	}
-	downstreamSubKey := fmt.Sprintf("runner.request.*.*.*")
-	downstreamSub, err := natsx.Nats.Subscribe(downstreamSubKey, r.downstreamFunc)
-	if err != nil {
-		return nil, err
-	}
-	r = &Runcher{
-		upstreamSub:   upstreamSub,
-		downstreamSub: downstreamSub,
-		upstream:      natsx.Nats,
-		downstream:    natsx.Nats,
-		fileInCache:   filecache.NewLocalFileCache(),
-		fileOutCache:  filecache.NewLocalFileCache(),
-		executor:      NewExecutor(store.NewDefaultQiNiu()),
-	}
-	err = r.executor.RunnerListen()
-	if err != nil {
-		return nil, err
-	}
-	return r, nil
+	return &Runcher{executor: executor}, nil
 }

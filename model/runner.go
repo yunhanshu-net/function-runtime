@@ -5,17 +5,23 @@ import (
 )
 
 type Runner struct {
-	StoreRoot  string `json:"store_root"`                                                                          //oss 存储的跟路径
-	AppCode    string `json:"app_code" form:"appCode" gorm:"column:app_code;comment:;" binding:"required"`         //应用名称（英文标识）
-	ToolType   string `json:"tool_type" form:"tool_type" gorm:"column:tool_type;comment:工具类型;" binding:"required"` //工具类型
-	Version    string `json:"version" form:"version" gorm:"column:version;comment:;" binding:"required"`           //应用版本
-	OssPath    string `json:"oss_path" form:"ossPath" gorm:"column:oss_path;comment:;"`                            //文件地址
-	TenantUser string `json:"tenant_user" form:"tenant_user" gorm:"column:tenant_user;comment:所属租户;"`              //所属租户
+	//Kind       string `json:"kind"`        //类型，可执行程序，so文件等等
+
+	WorkPath        string `json:"work_path"`
+	Command         string `json:"command"`
+	RequestJsonPath string `json:"request_json_path"`
+	Language        string `json:"language"`    //编程语言
+	StoreRoot       string `json:"store_root"`  //oss 存储的跟路径
+	Name            string `json:"name"`        //应用名称（英文标识）
+	ToolType        string `json:"tool_type"`   //工具类型
+	Version         string `json:"version"`     //应用版本
+	OssPath         string `json:"oss_path"`    //文件地址
+	User            string `json:"tenant_user"` //所属租户
 }
 
 func (r *Runner) Check() error {
-	if r.AppCode == "" {
-		return fmt.Errorf("AppCode 不能为空")
+	if r.Name == "" {
+		return fmt.Errorf("name 不能为空")
 	}
 	if r.ToolType == "" {
 		return fmt.Errorf("ToolType 不能为空")
@@ -24,8 +30,8 @@ func (r *Runner) Check() error {
 		return fmt.Errorf("version 不能为空")
 	}
 
-	if r.TenantUser == "" {
-		return fmt.Errorf("TenantUser 不能为空")
+	if r.User == "" {
+		return fmt.Errorf("user 不能为空")
 	}
 	return nil
 }

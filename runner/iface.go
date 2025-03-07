@@ -42,6 +42,8 @@ type Runner interface {
 	UnInstall() (unInstallInfo *response.UnInstallInfo, err error)                                            //卸载
 	UpdateVersion(up *model.UpdateVersion, fileStore store.FileStore) (*response.UpdateVersion, error)        //更新版本
 	RollbackVersion(r *request.RollbackVersion, fileStore store.FileStore) (*response.RollbackVersion, error) //版本回滚
-	Request(req *request.Request) (*response.Response, error)                                                 //运行程序
+	Request(req *request.RunnerRequest, ctx *Context) (*response.RunnerResponse, error)                       //运行程序
 	StartKeepAlive(ctx context.Context) error
+	Stop() error
+	GetInstance() interface{}
 }

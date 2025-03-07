@@ -17,6 +17,7 @@ import (
 	"github.com/yunhanshu-net/runcher/pkg/slicesx"
 	"github.com/yunhanshu-net/runcher/pkg/store"
 	"github.com/yunhanshu-net/runcher/pkg/stringsx"
+	"github.com/yunhanshu-net/runcher/transport"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,7 +30,7 @@ import (
 func NewCmd(runner *model.Runner) *Cmd {
 	//dir, _ := os.UserHomeDir()
 	dir := "./soft_cmd"
-	fullName := runner.AppCode
+	fullName := runner.Name
 
 	//这里应该判断本机系统类型
 	//if runner.ToolType == "windows" {
@@ -43,9 +44,9 @@ func NewCmd(runner *model.Runner) *Cmd {
 		InstallInfo: response.InstallInfo{
 			TempPath:     filepath.Join(os.TempDir(), runner.ToolType),
 			RootPath:     dir,
-			Name:         runner.AppCode,
+			Name:         runner.Name,
 			FullName:     fullName,
-			User:         runner.TenantUser,
+			User:         runner.User,
 			Version:      runner.Version,
 			DownloadPath: runner.OssPath,
 		},
@@ -58,6 +59,7 @@ func (c *Cmd) GetAppName() string {
 
 type Cmd struct {
 	response.InstallInfo
+	process    *os.Process
 	NatsClient *nats.Conn
 }
 
@@ -208,19 +210,38 @@ func (c *Cmd) start() {
 
 }
 
-func (c *Cmd) keepAlive(req *request.Request) (*response.Response, error) {
-	return nil, nil
+func (c *Cmd) keepAlive(req *request.RunnerRequest, ctx *Context) (*response.RunnerResponse, error) {
+
+	var res response.RunnerResponse
+	if ctx.Transport.GetConfig().TransportType != transport.TypeNats {
+		return nil, fmt.Errorf("cmd keepAlive not support transport type: %s", ctx.Transport.GetConfig().TransportType)
+	}
+	conn := ctx.Transport.GetConn().(*nats.Conn)
+
+	if req.Timeout == 0 {
+		req.Timeout = 60
+	}
+
+	msg, err := conn.Request(req.GetSubject(), req.Bytes(), time.Second*time.Duration(req.Timeout))
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(msg.Data, &res)
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
 }
-func (c *Cmd) request(req *request.Request) (*response.Response, error) {
+func (c *Cmd) request(req *request.RunnerRequest) (*response.RunnerResponse, error) {
 	var (
 		cmdStr    string
 		err       error
 		outString string
-		res       response.Response
+		res       response.RunnerResponse
 	)
 
-	req.RunnerInfo.WorkPath = c.GetInstallPath()              //软件安装目录
-	err = jsonx.SaveFile(req.RunnerInfo.RequestJsonPath, req) //todo 存储请求参数
+	req.Runner.WorkPath = c.GetInstallPath()              //软件安装目录
+	err = jsonx.SaveFile(req.Runner.RequestJsonPath, req) //todo 存储请求参数
 	if err != nil {
 		return nil, err
 	}
@@ -236,25 +257,25 @@ func (c *Cmd) request(req *request.Request) (*response.Response, error) {
 	appName := c.GetAppName()
 	softPath := fmt.Sprintf("%s/%s", installPath, appName)
 	softPath = strings.ReplaceAll(softPath, "\\", "/")
-	req.RunnerInfo.RequestJsonPath = strings.ReplaceAll(req.RunnerInfo.RequestJsonPath, "\\", "/")
+	req.Runner.RequestJsonPath = strings.ReplaceAll(req.Runner.RequestJsonPath, "\\", "/")
 	var cmd *exec.Cmd
-	split := strings.Split(req.RunnerInfo.RequestJsonPath, "/")
+	split := strings.Split(req.Runner.RequestJsonPath, "/")
 	reqName := split[len(split)-1]
 	switch runtime.GOOS {
 	case "windows":
 		cc := fmt.Sprintf("cd /D %s && %s %s .request/%s",
-			installPath, appName, req.RunnerInfo.Command, reqName)
+			installPath, appName, req.Runner.Command, reqName)
 		cmd = exec.Command("cmd.exe", "/C", cc)
 	case "linux", "darwin":
 		//cc := fmt.Sprintf("cd  %s && %s %s %s",
 		//	installPath, softPath, req.Command, req.RequestJsonPath)
 
 		cc := fmt.Sprintf("cd %s && ./%s %s .request/%s",
-			installPath, appName, req.RunnerInfo.Command, reqName)
+			installPath, appName, req.Runner.Command, reqName)
 		// Linux和macOS可以直接使用 && 连接命令
 		cmd = exec.Command("sh", "-c", cc)
 	default:
-		cmd = exec.Command(softPath, req.RunnerInfo.Command, req.RunnerInfo.RequestJsonPath)
+		cmd = exec.Command(softPath, req.Runner.Command, req.Runner.RequestJsonPath)
 		fmt.Printf("cmd call err:%s exec:%s ", err, cmdStr)
 	}
 
@@ -267,7 +288,7 @@ func (c *Cmd) request(req *request.Request) (*response.Response, error) {
 		logrus.Errorf("cmd run err:%s", err.Error())
 		return nil, err
 	}
-	cmdStr = fmt.Sprintf("%s %s %s", softPath, req.RunnerInfo.Command, req.RunnerInfo.RequestJsonPath)
+	cmdStr = fmt.Sprintf("%s %s %s", softPath, req.Runner.Command, req.Runner.RequestJsonPath)
 	logrus.Infof("Cmd run %s", cmdStr)
 	outString = out.String()
 	if outString == "" {
@@ -289,14 +310,14 @@ func (c *Cmd) request(req *request.Request) (*response.Response, error) {
 		//todo 请使用sdk开发软件
 		return nil, fmt.Errorf("soft call err 请使用sdk开发软件")
 	}
-	err = json.Unmarshal([]byte(resList[0]), &res)
+	err = json.Unmarshal([]byte(resList[0]), &res.Response)
 	if err != nil {
 		return nil, err
 	}
 	since := time.Since(now)
 	res.MetaData["cost"] = since
 	res.MetaData["mem_b"] = int(i)
-	err = json.Unmarshal([]byte(outString), &res.RunnerResponse)
+	err = json.Unmarshal([]byte(outString), &res)
 	if err != nil {
 		return nil, err
 	}
@@ -323,20 +344,27 @@ func (c *Cmd) StartKeepAlive(ctx context.Context) error {
 	if cmd == nil {
 		return fmt.Errorf("cmd is nil ")
 	}
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := cmd.Run()
+	err := cmd.Start()
 	if err != nil {
 		logrus.Errorf("cmd run err:%s", err.Error())
 		return err
 	}
+	c.process = cmd.Process
 	return nil
 }
 
-func (c *Cmd) Request(req *request.Request) (*response.Response, error) {
-	if req.IsRunning {
-		return c.keepAlive(req)
+func (c *Cmd) Request(req *request.RunnerRequest, ctx *Context) (*response.RunnerResponse, error) {
+	if ctx.IsRunning() {
+		return c.keepAlive(req, ctx)
 	}
 
 	return c.request(req)
+}
+
+func (c *Cmd) Stop() error {
+	return c.process.Kill()
+}
+
+func (c *Cmd) GetInstance() interface{} {
+	return c.process
 }

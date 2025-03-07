@@ -1,30 +1,51 @@
 package request
 
+import (
+	"encoding/json"
+	"fmt"
+	"github.com/yunhanshu-net/runcher/model"
+)
+
 type Request struct {
-	IsRunning      bool
-	StartKeepAlive bool
-
-	RunnerInfo *RunnerInfo            `json:"soft_info"` //此次执行的软件信息
-	TraceID    string                 `json:"trace_id"`  //分布式追踪
-	Url        string                 `json:"url"`
-	Method     string                 `json:"method"`
-	Headers    map[string]string      `json:"headers"`
-	MetaData   map[string]interface{} `json:"meta_data"` //请求元数据
-	Body       map[string]interface{} `json:"body"`      //请求json
-	FileMap    map[string][]string    `json:"file_map"`
+	TraceID string                 `json:"trace_id"`
+	Route   string                 `json:"route"`
+	Method  string                 `json:"method"`
+	Headers map[string]string      `json:"headers"`
+	Body    map[string]interface{} `json:"body"` //请求json
+	FileMap map[string][]string    `json:"file_map"`
 }
 
-type RunnerInfo struct {
-	RequestJsonPath string `json:"request_json_path"` //请求参数存储路径
-	WorkPath        string `json:"work_path"`         //执行目录
-	RunnerType      string `json:"runner_type"`       //软件类型
-	User            string `json:"user"`              //软件所属的用户
-	Soft            string `json:"soft"`              //软件名
-	Command         string `json:"command"`           //命令
-	Version         string `json:"version"`           //版本
-	SavePath        string `json:"save_path"`         //软件存储的 oss 地址
+func (r *Request) name() {
+
 }
 
-func (r *RunnerInfo) Key() string {
-	return r.User + "/" + r.Soft + "/" + r.Version
+type Runner struct {
+	Command         string `json:"command"`
+	WorkPath        string `json:"work_path"`
+	Name            string `json:"name"`
+	User            string `json:"user"`
+	Version         string `json:"version"`
+	RequestJsonPath string `json:"request_json_path"`
+}
+type RunnerRequest struct {
+	Timeout         int                    `json:"sync"`
+	Runner          *model.Runner          `json:"runner"`
+	TransportConfig *TransportConfig       `json:"transport_config"`
+	Metadata        map[string]interface{} `json:"metadata"`
+	Request         *Request               `json:"request"`
+}
+
+type TransportConfig struct {
+	Type string `json:"type"`
+}
+
+func (r *RunnerRequest) GetSubject() string {
+	return fmt.Sprintf("runner.%s.%s.%s.run", r.Runner.User, r.Runner.Name, r.Runner.Version)
+}
+func (r *RunnerRequest) Bytes() []byte {
+	jsonBytes, err := json.Marshal(r)
+	if err != nil {
+		panic(err)
+	}
+	return jsonBytes
 }

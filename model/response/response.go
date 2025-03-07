@@ -1,11 +1,11 @@
 package response
 
-type Response struct {
-	MetaData       map[string]interface{} `json:"meta_data"` //内核层的元数据
-	RunnerResponse *RunnerResponse        `json:"runner_response"`
+type RunnerResponse struct {
+	MetaData map[string]interface{} `json:"meta_data"` //内核层的元数据
+	Response *Response              `json:"response"`
 }
 
-type RunnerResponse struct {
+type Response struct {
 	MetaData   map[string]interface{} `json:"meta_data"` //SDK层元数据，例如日志，执行耗时，内存占用等等
 	StatusCode int                    `json:"status_code"`
 	Headers    map[string]string      `json:"headers"`
@@ -18,18 +18,4 @@ type BizData struct {
 	Msg      string                 `json:"msg"`
 	Data     interface{}            `json:"data"`
 	Code     int                    `json:"code"`
-}
-
-func (r *RunnerResponse) JSON(statusCode int, data *BizData) error {
-	r.StatusCode = statusCode
-	r.Body = data
-	return nil
-}
-
-func (r *RunnerResponse) OKWithJSON(data interface{}, meta ...map[string]interface{}) error {
-	bz := &BizData{Msg: "ok", Code: 0, Data: data}
-	if len(meta) > 0 {
-		bz.MetaData = meta[0]
-	}
-	return r.JSON(200, bz)
 }
