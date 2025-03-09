@@ -46,7 +46,7 @@ back:
 		return err
 	}
 	defer file.Close()
-	_, err = file.Write(marshal)
+	_, err = file.WriteString(string(marshal))
 	if err != nil {
 		return err
 	}

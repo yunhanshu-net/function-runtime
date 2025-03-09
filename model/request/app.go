@@ -2,9 +2,7 @@ package request
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/yunhanshu-net/runcher/model"
-	"time"
 )
 
 type RollbackVersion struct {
@@ -12,9 +10,9 @@ type RollbackVersion struct {
 	OldVersion string        `json:"old_version"`
 }
 
-func (c *Request) IsOpenCommand() bool {
-	return c.RunnerInfo.Command == "_cloud_func" || c.RunnerInfo.Command == "_docs_info_text"
-}
+//func (c *Request) IsOpenCommand() bool {
+//	return c.RunnerInfo.Command == "_cloud_func" || c.RunnerInfo.Command == "_docs_info_text"
+//}
 
 func (c *Request) RequestJSON() (string, error) {
 	j, err := json.Marshal(c.Body)
@@ -24,8 +22,8 @@ func (c *Request) RequestJSON() (string, error) {
 	return string(j), nil
 }
 
-func (c *Request) GetRequestFilePath(callerPath string) string {
-	reqJson := callerPath + fmt.Sprintf("/.request/%v_%v.json",
-		c.RunnerInfo.Soft, time.Now().UnixNano())
-	return reqJson
-}
+//func (c *Request) GetRequestFilePath(callerPath string) string {
+//	reqJson := callerPath + fmt.Sprintf("/.request/%v_%v.json",
+//		c.RunnerInfo.Soft, time.Now().UnixNano())
+//	return reqJson
+//}

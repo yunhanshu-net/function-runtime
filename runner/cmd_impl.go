@@ -2,10 +2,9 @@ package runner
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/nats-io/nats.go"
+	"github.com/google/uuid"
 	"github.com/otiai10/copy"
 	"github.com/sirupsen/logrus"
 	"github.com/yunhanshu-net/runcher/model"
@@ -17,7 +16,6 @@ import (
 	"github.com/yunhanshu-net/runcher/pkg/slicesx"
 	"github.com/yunhanshu-net/runcher/pkg/store"
 	"github.com/yunhanshu-net/runcher/pkg/stringsx"
-	"github.com/yunhanshu-net/runcher/transport"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,7 +27,7 @@ import (
 
 func NewCmd(runner *model.Runner) *Cmd {
 	//dir, _ := os.UserHomeDir()
-	dir := "./soft_cmd"
+	dir := "/Users/yy/Desktop/code/github.com/sdk-go/soft"
 	fullName := runner.Name
 
 	//这里应该判断本机系统类型
@@ -59,8 +57,8 @@ func (c *Cmd) GetAppName() string {
 
 type Cmd struct {
 	response.InstallInfo
-	process    *os.Process
-	NatsClient *nats.Conn
+	process *os.Process
+	uuid    string
 }
 
 func (c *Cmd) RollbackVersion(r *request.RollbackVersion, fileStore store.FileStore) (*response.RollbackVersion, error) {
@@ -78,12 +76,12 @@ func (c *Cmd) DeCompressPath() string {
 
 // GetInstallPath  安装目录
 func (c *Cmd) GetInstallPath() string {
-	abs, err := filepath.Abs(fmt.Sprintf("%s/%s/%s", c.RootPath, c.User, c.Name))
-	if err != nil {
-		panic(err)
-		return abs
-	}
-	return abs
+	//abs, err := filepath.Abs(fmt.Sprintf("%s/%s/%s/%s", c.RootPath, c.User, c.Name, c.Version))
+	//if err != nil {
+	//	panic(err)
+	//	return abs
+	//}
+	return fmt.Sprintf("%s/%s/%s/%s", c.RootPath, c.User, c.Name, c.Version)
 }
 
 // Chmod mac和linux需要授予执行权限
@@ -210,28 +208,28 @@ func (c *Cmd) start() {
 
 }
 
-func (c *Cmd) keepAlive(req *request.RunnerRequest, ctx *Context) (*response.RunnerResponse, error) {
-
-	var res response.RunnerResponse
-	if ctx.Transport.GetConfig().TransportType != transport.TypeNats {
-		return nil, fmt.Errorf("cmd keepAlive not support transport type: %s", ctx.Transport.GetConfig().TransportType)
-	}
-	conn := ctx.Transport.GetConn().(*nats.Conn)
-
-	if req.Timeout == 0 {
-		req.Timeout = 60
-	}
-
-	msg, err := conn.Request(req.GetSubject(), req.Bytes(), time.Second*time.Duration(req.Timeout))
-	if err != nil {
-		return nil, err
-	}
-	err = json.Unmarshal(msg.Data, &res)
-	if err != nil {
-		return nil, err
-	}
-	return &res, nil
-}
+// func (c *Cmd) keepAlive(req *request.Context, ctx *Context) (*response.RunnerResponse, error) {
+//
+//		var res response.RunnerResponse
+//		if ctx.Transport.GetConfig().TransportType != transport.TypeNats {
+//			return nil, fmt.Errorf("cmd keepAlive not support transport type: %s", ctx.Transport.GetConfig().TransportType)
+//		}
+//		conn := ctx.Transport.GetConn().(*nats.Conn)
+//
+//		if req.Timeout == 0 {
+//			req.Timeout = 60
+//		}
+//
+//		msg, err := conn.Request(req.GetSubject(), req.Bytes(), time.Second*time.Duration(req.Timeout))
+//		if err != nil {
+//			return nil, err
+//		}
+//		err = json.Unmarshal(msg.Data, &res)
+//		if err != nil {
+//			return nil, err
+//		}
+//		return &res, nil
+//	}
 func (c *Cmd) request(req *request.RunnerRequest) (*response.RunnerResponse, error) {
 	var (
 		cmdStr    string
@@ -239,8 +237,9 @@ func (c *Cmd) request(req *request.RunnerRequest) (*response.RunnerResponse, err
 		outString string
 		res       response.RunnerResponse
 	)
-
-	req.Runner.WorkPath = c.GetInstallPath()              //软件安装目录
+	fileName := strconv.Itoa(int(time.Now().UnixMicro())) + ".json"
+	req.Runner.WorkPath = c.GetInstallPath() //软件安装目录
+	req.Runner.RequestJsonPath = req.Runner.WorkPath + "/.request/" + fileName
 	err = jsonx.SaveFile(req.Runner.RequestJsonPath, req) //todo 存储请求参数
 	if err != nil {
 		return nil, err
@@ -249,7 +248,7 @@ func (c *Cmd) request(req *request.RunnerRequest) (*response.RunnerResponse, err
 		if err != nil {
 			logrus.Errorf("Cmd call err:%s exec:%s ", err, cmdStr)
 		} else {
-			logrus.Infof("Cmd call exec:%s ", cmdStr)
+			//logrus.Infof("Cmd call exec:%s ", cmdStr)
 		}
 	}()
 	now := time.Now()
@@ -259,19 +258,19 @@ func (c *Cmd) request(req *request.RunnerRequest) (*response.RunnerResponse, err
 	softPath = strings.ReplaceAll(softPath, "\\", "/")
 	req.Runner.RequestJsonPath = strings.ReplaceAll(req.Runner.RequestJsonPath, "\\", "/")
 	var cmd *exec.Cmd
-	split := strings.Split(req.Runner.RequestJsonPath, "/")
-	reqName := split[len(split)-1]
+	//split := strings.Split(req.Runner.RequestJsonPath, "/")
+	//reqName := split[len(split)-1]
 	switch runtime.GOOS {
 	case "windows":
 		cc := fmt.Sprintf("cd /D %s && %s %s .request/%s",
-			installPath, appName, req.Runner.Command, reqName)
+			installPath, appName, req.Runner.Command, fileName)
 		cmd = exec.Command("cmd.exe", "/C", cc)
 	case "linux", "darwin":
 		//cc := fmt.Sprintf("cd  %s && %s %s %s",
 		//	installPath, softPath, req.Command, req.RequestJsonPath)
 
 		cc := fmt.Sprintf("cd %s && ./%s %s .request/%s",
-			installPath, appName, req.Runner.Command, reqName)
+			installPath, appName, req.Runner.Command, fileName)
 		// Linux和macOS可以直接使用 && 连接命令
 		cmd = exec.Command("sh", "-c", cc)
 	default:
@@ -289,21 +288,20 @@ func (c *Cmd) request(req *request.RunnerRequest) (*response.RunnerResponse, err
 		return nil, err
 	}
 	cmdStr = fmt.Sprintf("%s %s %s", softPath, req.Runner.Command, req.Runner.RequestJsonPath)
-	logrus.Infof("Cmd run %s", cmdStr)
 	outString = out.String()
 	if outString == "" {
 		//todo
 		return nil, fmt.Errorf("out.String() ==== nil cmd程序输出的结果为空，请检测程序是否正确")
 	}
-	mem := stringsx.ParserHtmlTagContent(outString, "mem_use_B")
-	if len(mem) <= 0 {
-		//todo 请使用sdk开发软件
-		return nil, fmt.Errorf("soft call err 未获取到内存占用信息，请使用sdk开发软件")
-	}
-	i, err := strconv.ParseInt(mem[0], 10, 64)
-	if err != nil {
-		return nil, err
-	}
+	//mem := stringsx.ParserHtmlTagContent(outString, "mem_use_B")
+	//if len(mem) <= 0 {
+	//	//todo 请使用sdk开发软件
+	//	return nil, fmt.Errorf("soft call err 未获取到内存占用信息，请使用sdk开发软件")
+	//}
+	//i, err := strconv.ParseInt(mem[0], 10, 64)
+	//if err != nil {
+	//	return nil, err
+	//}
 
 	resList := stringsx.ParserHtmlTagContent(outString, "Response")
 	if len(resList) == 0 {
@@ -314,30 +312,37 @@ func (c *Cmd) request(req *request.RunnerRequest) (*response.RunnerResponse, err
 	if err != nil {
 		return nil, err
 	}
-	since := time.Since(now)
-	res.MetaData["cost"] = since
-	res.MetaData["mem_b"] = int(i)
-	err = json.Unmarshal([]byte(outString), &res)
-	if err != nil {
-		return nil, err
+	since := time.Since(now).Milliseconds()
+	if res.MetaData == nil {
+		res.MetaData = make(map[string]interface{})
 	}
+	res.MetaData["cost"] = since
+	//res.MetaData["mem_b"] = int(i)
+	//err = json.Unmarshal([]byte(outString), &res)
+	//if err != nil {
+	//	return nil, err
+	//}
 	//p.printSoftLogs(s, since)
 	return &res, nil
 }
-func (c *Cmd) StartKeepAlive(ctx context.Context) error {
+func (c *Cmd) StartKeepAlive(ctx *request.Context) error {
 	var cmd *exec.Cmd
 	userSoft := c.User + "/" + c.Name
 	switch runtime.GOOS {
 	case "windows":
-		cc := fmt.Sprintf("cd /D %s && %s _connect_ %s",
+		cc := fmt.Sprintf("cd /D %s && %s _connect %s",
 			c.GetInstallPath(), c.GetAppName(), userSoft)
 		cmd = exec.Command("cmd.exe", "/C", cc)
 	case "linux", "darwin":
 		//cc := fmt.Sprintf("cd  %s && %s %s %s",
 		//	installPath, softPath, req.Command, req.RequestJsonPath)
 
-		cc := fmt.Sprintf("cd %s && ./%s _connect_ %s",
-			c.GetInstallPath(), c.GetAppName(), userSoft)
+		path := c.GetInstallPath() + "/.request/" + uuid.New().String() + ".json"
+		err := jsonx.SaveFile(path, ctx.Request)
+		if err != nil {
+			return err
+		}
+		cc := fmt.Sprintf("cd %s && ./%s _connect %s", c.GetInstallPath(), c.GetAppName(), path)
 		// Linux和macOS可以直接使用 && 连接命令
 		cmd = exec.Command("sh", "-c", cc)
 	}
@@ -349,16 +354,13 @@ func (c *Cmd) StartKeepAlive(ctx context.Context) error {
 		logrus.Errorf("cmd run err:%s", err.Error())
 		return err
 	}
+	c.uuid = ctx.Request.UUID
 	c.process = cmd.Process
 	return nil
 }
 
-func (c *Cmd) Request(req *request.RunnerRequest, ctx *Context) (*response.RunnerResponse, error) {
-	if ctx.IsRunning() {
-		return c.keepAlive(req, ctx)
-	}
-
-	return c.request(req)
+func (c *Cmd) Request(ctx *request.Context) (*response.RunnerResponse, error) {
+	return c.request(ctx.Request)
 }
 
 func (c *Cmd) Stop() error {
@@ -367,4 +369,8 @@ func (c *Cmd) Stop() error {
 
 func (c *Cmd) GetInstance() interface{} {
 	return c.process
+}
+
+func (c *Cmd) GetUUID() string {
+	return c.uuid
 }

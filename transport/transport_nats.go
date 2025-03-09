@@ -7,7 +7,7 @@ import (
 )
 
 type Config struct {
-	TransportType string            `json:"transport_type"`
+	TransportType Type              `json:"transport_type"`
 	Metadata      map[string]string `json:"metadata"`
 	WorkPath      string            `json:"work_path"`
 	RunnerType    string            `json:"runner_type"`
@@ -52,7 +52,11 @@ func (t *transportNats) GetStatus() *Status {
 //心跳检测，探针
 
 func newTransportNats(transportConfig *Config) (trs *transportNats, err error) {
-	return &transportNats{TransportConfig: transportConfig, wg: &sync.WaitGroup{}, msgList: make(chan *Msg, 10000), status: &Status{Status: "init"}}, nil
+	return &transportNats{
+		TransportConfig: transportConfig,
+		wg:              &sync.WaitGroup{},
+		msgList:         make(chan *Msg, 10000),
+		status:          &Status{Status: "init"}}, nil
 
 }
 

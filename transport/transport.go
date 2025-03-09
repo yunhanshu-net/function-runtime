@@ -2,8 +2,14 @@ package transport
 
 import "errors"
 
+type Type string
+
+func (t *Type) String() string {
+	return string(*t)
+}
+
 const (
-	TypeNats = "nats"
+	TypeNats Type = "nats"
 )
 
 type Status struct {

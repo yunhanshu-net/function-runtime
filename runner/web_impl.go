@@ -1,7 +1,6 @@
 package runner
 
 import (
-	"context"
 	"fmt"
 	"github.com/yunhanshu-net/runcher/model"
 	"github.com/yunhanshu-net/runcher/model/request"
@@ -182,11 +181,15 @@ func (w *WebSite) UpdateVersion(up *model.UpdateVersion, fileStore store.FileSto
 	}
 	return &response.UpdateVersion{}, nil
 }
-func (w *WebSite) StartKeepAlive(ctx context.Context) error {
+func (w *WebSite) StartKeepAlive(ctx *request.Context) error {
 	return nil
 }
 
-func (w *WebSite) Request(req *request.RunnerRequest, ctx *Context) (*response.RunnerResponse, error) {
+func (w *WebSite) Request(ctx *request.Context) (*response.RunnerResponse, error) {
 	//TODO implement me
 	panic("implement me")
+}
+
+func (w *WebSite) GetUUID() string {
+	return ""
 }

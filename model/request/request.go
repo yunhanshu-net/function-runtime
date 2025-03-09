@@ -15,10 +15,6 @@ type Request struct {
 	FileMap map[string][]string    `json:"file_map"`
 }
 
-func (r *Request) name() {
-
-}
-
 type Runner struct {
 	Command         string `json:"command"`
 	WorkPath        string `json:"work_path"`
@@ -28,7 +24,8 @@ type Runner struct {
 	RequestJsonPath string `json:"request_json_path"`
 }
 type RunnerRequest struct {
-	Timeout         int                    `json:"sync"`
+	UUID            string                 `json:"uuid"`
+	Timeout         int                    `json:"timeout"`
 	Runner          *model.Runner          `json:"runner"`
 	TransportConfig *TransportConfig       `json:"transport_config"`
 	Metadata        map[string]interface{} `json:"metadata"`

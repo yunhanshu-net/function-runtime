@@ -1,10 +1,15 @@
 package runner
 
-import "github.com/yunhanshu-net/runcher/transport"
+import (
+	"github.com/nats-io/nats.go"
+	"github.com/yunhanshu-net/runcher/transport"
+)
 
 type Context struct {
 	Transport transport.Info
-	Status    string
+
+	Conn   *nats.Conn
+	Status string
 }
 
 func (c *Context) IsRunning() bool {

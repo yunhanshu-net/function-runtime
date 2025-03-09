@@ -10,13 +10,13 @@ type Runner struct {
 	WorkPath        string `json:"work_path"`
 	Command         string `json:"command"`
 	RequestJsonPath string `json:"request_json_path"`
-	Language        string `json:"language"`    //编程语言
-	StoreRoot       string `json:"store_root"`  //oss 存储的跟路径
-	Name            string `json:"name"`        //应用名称（英文标识）
-	ToolType        string `json:"tool_type"`   //工具类型
-	Version         string `json:"version"`     //应用版本
-	OssPath         string `json:"oss_path"`    //文件地址
-	User            string `json:"tenant_user"` //所属租户
+	Language        string `json:"language"`   //编程语言
+	StoreRoot       string `json:"store_root"` //oss 存储的跟路径
+	Name            string `json:"name"`       //应用名称（英文标识）
+	ToolType        string `json:"tool_type"`  //工具类型
+	Version         string `json:"version"`    //应用版本
+	OssPath         string `json:"oss_path"`   //文件地址
+	User            string `json:"user"`       //所属租户
 }
 
 func (r *Runner) Check() error {
