@@ -5,19 +5,21 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/yunhanshu-net/runcher/model/request"
 	"github.com/yunhanshu-net/runcher/runtime"
+	"github.com/yunhanshu-net/runcher/v2/scheduler"
 	"sync"
 )
 
 type Runcher struct {
-	conn        *nats.Conn
-	sub         *nats.Subscription
-	upstreamSub *nats.Subscription
-
-	runnerLock map[string]*sync.RWMutex
-	lk         *sync.RWMutex
-	runners    map[string]*runtime.Runners
-
+	conn                *nats.Conn
+	receiveRunnerSub    *nats.Subscription
+	upstreamSub         *nats.Subscription
+	runnerLock          map[string]*sync.RWMutex
+	lk                  *sync.RWMutex
+	runners             map[string]*runtime.Runners
 	waitUUIDRunnerReady map[string]*waitReady
+
+	Scheduler *scheduler.Scheduler
+
 	//closeReq        chan string
 }
 
@@ -27,17 +29,12 @@ type waitReady struct {
 }
 
 func NewRuncher() *Runcher {
-	//opt := server.Options{}
-	//s, err := server.NewServer()
-	//if err != nil {
-	//	panic(err)
-	//}
-
 	r := &Runcher{
 		runnerLock:          make(map[string]*sync.RWMutex),
 		lk:                  &sync.RWMutex{},
 		runners:             make(map[string]*runtime.Runners),
 		waitUUIDRunnerReady: make(map[string]*waitReady),
+		Scheduler:           scheduler.NewDefaultScheduler(),
 	}
 	return r
 }

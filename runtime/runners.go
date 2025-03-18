@@ -10,10 +10,9 @@ type Runners struct {
 	QPSRWMutex         *sync.RWMutex
 	StartingCountMutex *sync.RWMutex
 	StartingCount      int
-
-	QPS             map[int64]int
-	CurrentPosition int       //轮询的指针
-	Running         []*Runner `json:"instances"` //每个runner 可以有多个实例
+	QPS                map[int64]int
+	CurrentPosition    int       //轮询的指针
+	Running            []*Runner `json:"instances"` //每个runner 可以有多个实例
 }
 
 func (r *Runners) RemoveRunner(uuid string) {

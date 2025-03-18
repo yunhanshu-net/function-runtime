@@ -2,6 +2,8 @@ package model
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 )
 
 type Runner struct {
@@ -17,6 +19,35 @@ type Runner struct {
 	Version         string `json:"version"`    //应用版本
 	OssPath         string `json:"oss_path"`   //文件地址
 	User            string `json:"user"`       //所属租户
+}
+
+func (r *Runner) GetVersionNum() (int, error) {
+	replace := strings.ReplaceAll(r.Version, "v", "")
+	version, err := strconv.Atoi(replace)
+	if err != nil {
+		return 0, err
+	}
+	return version, nil
+}
+
+func (r *Runner) GetNextVersion() (string, error) {
+	num, err := r.GetVersionNum()
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("v%d", num+1), nil
+}
+
+func (r *Runner) GetInstallPath(rootPath string) string {
+	return fmt.Sprintf("%s/%s/%s/%s", strings.TrimSuffix(rootPath, "/"), r.User, r.Name, r.Version)
+}
+
+func (r *Runner) GetNextVersionInstallPath(rootPath string) (string, error) {
+	nextVersion, err := r.GetNextVersion()
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s/%s/%s/%s", strings.TrimSuffix(rootPath, "/"), r.User, r.Name, nextVersion), nil
 }
 
 func (r *Runner) Check() error {

@@ -7,6 +7,7 @@ import (
 )
 
 type Request struct {
+	UUID    string                 `json:"uuid"`
 	TraceID string                 `json:"trace_id"`
 	Route   string                 `json:"route"`
 	Method  string                 `json:"method"`

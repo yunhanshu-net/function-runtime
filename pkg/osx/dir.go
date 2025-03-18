@@ -91,3 +91,39 @@ func CheckDirectChildren(baseDir string) (files []string, dirs []string, err err
 
 	return files, dirs, nil
 }
+
+// FileExists 判断文件是否存在
+func FileExists(filePath string) bool {
+	// 使用 os.Stat 获取文件信息
+	_, err := os.Stat(filePath)
+	if err == nil {
+		// 文件存在
+		return true
+	}
+	// 检查错误是否是文件不存在的错误
+	if os.IsNotExist(err) {
+		// 文件不存在
+		return false
+	}
+	// 其他错误（例如权限问题）
+	fmt.Printf("Error checking file existence: %v\n", err)
+	return false
+}
+
+// DirExists 判断目录是否存在
+func DirExists(dirPath string) bool {
+	// 使用 os.Stat 获取路径信息
+	fileInfo, err := os.Stat(dirPath)
+	if err == nil {
+		// 如果路径存在且是目录
+		return fileInfo.IsDir()
+	}
+	// 检查错误是否是路径不存在的错误
+	if os.IsNotExist(err) {
+		// 路径不存在
+		return false
+	}
+	// 其他错误（例如权限问题）
+	fmt.Printf("Error checking directory existence: %v\n", err)
+	return false
+}

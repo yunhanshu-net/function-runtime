@@ -2,8 +2,15 @@ package request
 
 import (
 	"encoding/json"
+	"github.com/nats-io/nats.go"
 	"github.com/yunhanshu-net/runcher/model"
 )
+
+type Context struct {
+	Conn    *nats.Conn     `json:"-"`
+	Msg     *nats.Msg      `json:"-"`
+	Request *RunnerRequest `json:"request"`
+}
 
 type RollbackVersion struct {
 	RunnerConf *model.Runner `json:"runner_conf"`

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/yunhanshu-net/runcher/test"
 	v2 "github.com/yunhanshu-net/runcher/v2"
 	"log"
 	"net/http"
@@ -22,5 +23,7 @@ func main() {
 		}
 		os.Exit(0)
 	}()
+
+	test.GenCode(runcher)
 	select {}
 }

@@ -22,7 +22,6 @@ func (r *Runcher) connectRunner() error {
 			newMsg := nats.NewMsg(msg.Subject)
 			newMsg.Header.Set("status", "success")
 			msg.RespondMsg(newMsg)
-
 		}
 
 		if msg.Header.Get("close") == "req" {
@@ -33,13 +32,12 @@ func (r *Runcher) connectRunner() error {
 			newMsg := nats.NewMsg(msg.Subject)
 			newMsg.Header.Set("status", "success")
 			msg.RespondMsg(newMsg)
-
 		}
 
 	})
 	if err != nil {
 		return err
 	}
-	r.sub = subscribe
+	r.receiveRunnerSub = subscribe
 	return nil
 }
