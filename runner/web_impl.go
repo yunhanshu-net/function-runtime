@@ -5,6 +5,7 @@ import (
 	"github.com/yunhanshu-net/runcher/model"
 	"github.com/yunhanshu-net/runcher/model/request"
 	"github.com/yunhanshu-net/runcher/model/response"
+	"github.com/yunhanshu-net/runcher/pkg/codex"
 	"github.com/yunhanshu-net/runcher/pkg/compress"
 	"github.com/yunhanshu-net/runcher/pkg/osx"
 	"github.com/yunhanshu-net/runcher/pkg/store"
@@ -37,6 +38,11 @@ func NewWebSite(runner *model.Runner) *WebSite {
 type WebSite struct {
 	Host string
 	response.InstallInfo
+}
+
+func (w *WebSite) AddApi(runnerRoot string, runner *model.Runner, codeApi *codex.CodeApi) error {
+	//todo not support
+	return fmt.Errorf("not support")
 }
 
 func (w *WebSite) Stop() error {

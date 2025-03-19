@@ -10,12 +10,14 @@ import (
 	"github.com/yunhanshu-net/runcher/model"
 	"github.com/yunhanshu-net/runcher/model/request"
 	"github.com/yunhanshu-net/runcher/model/response"
+	"github.com/yunhanshu-net/runcher/pkg/codex"
 	"github.com/yunhanshu-net/runcher/pkg/compress"
 	"github.com/yunhanshu-net/runcher/pkg/jsonx"
 	"github.com/yunhanshu-net/runcher/pkg/osx"
 	"github.com/yunhanshu-net/runcher/pkg/slicesx"
 	"github.com/yunhanshu-net/runcher/pkg/store"
 	"github.com/yunhanshu-net/runcher/pkg/stringsx"
+	"github.com/yunhanshu-net/runcher/runner/coder"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -373,4 +375,17 @@ func (c *Cmd) GetInstance() interface{} {
 
 func (c *Cmd) GetUUID() string {
 	return c.uuid
+}
+
+func (c *Cmd) AddApi(runnerRoot string, runner *model.Runner, codeApi *codex.CodeApi) error {
+
+	newCoder, err := coder.NewCoder(runner.Language)
+	if err != nil {
+		return err
+	}
+	err = newCoder.AddApi(runnerRoot, runner, codeApi)
+	if err != nil {
+		return err
+	}
+	return nil
 }

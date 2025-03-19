@@ -5,6 +5,7 @@ import (
 	"github.com/yunhanshu-net/runcher/model/request"
 	"github.com/yunhanshu-net/runcher/model/response"
 	"github.com/yunhanshu-net/runcher/pkg/store"
+	"github.com/yunhanshu-net/runcher/runner/coder"
 	"sync"
 )
 
@@ -34,7 +35,7 @@ func NewRunner(runner *model.Runner) Runner {
 	return NewCmd(runner)
 }
 
-// Runner RunBox 引擎可以调度任何实现Runner 接口的程序（可执行程序|批处理文件|python代码|lua|ruby|nodejs|docker镜像）
+// Runner runcher 引擎可以调度任何实现Runner 接口的程序（可执行程序|批处理文件|python代码|lua|ruby|nodejs|docker镜像|java jar包|so文件）
 type Runner interface {
 	Install(store store.FileStore) (installInfo *response.InstallInfo, err error)                             //安装程序
 	GetInstallPath() (path string)                                                                            //获取安装路径
@@ -45,6 +46,7 @@ type Runner interface {
 
 	GetUUID() string
 
+	coder.Coder
 	// StartKeepAlive ctx with uuid
 	StartKeepAlive(ctx *request.Context) error
 	Stop() error

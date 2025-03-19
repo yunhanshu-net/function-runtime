@@ -46,7 +46,10 @@ func copyFile(src, dst string) error {
 // srcDir 源目录
 // dstDir 目标目录
 func CopyDirectory(srcDir, dstDir string) error {
-	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
+	defer func() {
+		SyncFS()
+	}()
+	err := filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -72,24 +75,10 @@ func CopyDirectory(srcDir, dstDir string) error {
 
 		return nil
 	})
-}
-
-// CheckDirectChildren 返回指定目录下的文件列表和目录列表
-func CheckDirectChildren(baseDir string) (files []string, dirs []string, err error) {
-	entries, err := os.ReadDir(baseDir)
 	if err != nil {
-		return nil, nil, err // 返回错误
+		return err
 	}
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			dirs = append(dirs, entry.Name()) // 添加到目录列表
-		} else {
-			files = append(files, entry.Name()) // 添加到文件列表
-		}
-	}
-
-	return files, dirs, nil
+	return nil
 }
 
 // FileExists 判断文件是否存在
@@ -126,4 +115,22 @@ func DirExists(dirPath string) bool {
 	// 其他错误（例如权限问题）
 	fmt.Printf("Error checking directory existence: %v\n", err)
 	return false
+}
+
+// CheckDirectChildren 返回指定目录下的文件列表和目录列表
+func CheckDirectChildren(baseDir string) (files []string, dirs []string, err error) {
+	entries, err := os.ReadDir(baseDir)
+	if err != nil {
+		return nil, nil, err // 返回错误
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			dirs = append(dirs, entry.Name()) // 添加到目录列表
+		} else {
+			files = append(files, entry.Name()) // 添加到文件列表
+		}
+	}
+
+	return files, dirs, nil
 }

@@ -1,4 +1,4 @@
-package scheduler
+package coder
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ type Golang struct {
 }
 
 func (g *Golang) AddApi(runnerRoot string, runner *model.Runner, codeApi *codex.CodeApi) error {
-	currentPath := runner.GetInstallPath(runnerRoot)
+	currentVersionPath := runner.GetInstallPath(runnerRoot)
 	nextVersionPath, err := runner.GetNextVersionInstallPath(runnerRoot)
 	if err != nil {
 		return err
@@ -22,7 +22,7 @@ func (g *Golang) AddApi(runnerRoot string, runner *model.Runner, codeApi *codex.
 
 	fileSavePath, absFile := codeApi.GetFileSaveFullPath(nextVersionPath)
 	if osx.DirExists(fileSavePath) {
-		return status.ErrorCodeApiFileExist.WithMessage(absFile)
+		return status.ErrorCodeApiFileExist.WithMessage(fileSavePath)
 	} else {
 		err = os.MkdirAll(fileSavePath, 0755)
 		if err != nil {
@@ -40,7 +40,7 @@ func (g *Golang) AddApi(runnerRoot string, runner *model.Runner, codeApi *codex.
 		return err
 	}
 
-	err = osx.CopyDirectory(currentPath, nextVersionPath)
+	err = osx.CopyDirectory(currentVersionPath, nextVersionPath) //把当前项目代码保存一份复制到下一个版本
 	if err != nil {
 		return err
 	}
@@ -66,10 +66,6 @@ func (g *Golang) AddApi(runnerRoot string, runner *model.Runner, codeApi *codex.
 
 	// 设置工作目录（可选）
 	cmd.Dir = nextVersionPath // 当前目录，可以根据需要修改为项目路径
-
-	//// 捕获标准输出和错误输出
-	//cmd.Stdout = os.Stdout // 将命令的标准输出打印到控制台
-	//cmd.Stderr = os.Stderr // 将命令的错误输出打印到控制台
 
 	output, err := cmd.Output()
 	if err != nil {
