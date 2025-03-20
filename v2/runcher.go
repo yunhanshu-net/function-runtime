@@ -12,14 +12,14 @@ import (
 )
 
 type Runcher struct {
-	conn                *nats.Conn
-	receiveRunnerSub    *nats.Subscription
-	upstreamSub         *nats.Subscription
-	manageSub           *nats.Subscription
-	runnerLock          map[string]*sync.RWMutex
-	lk                  *sync.RWMutex
-	runners             map[string]*runtime.Runners
-	waitUUIDRunnerReady map[string]*waitReady
+	conn             *nats.Conn
+	receiveRunnerSub *nats.Subscription
+	upstreamSub      *nats.Subscription
+	manageSub        *nats.Subscription
+	runnerLock       map[string]*sync.RWMutex
+	lk               *sync.RWMutex
+	runners          map[string]*runtime.Runners
+	waitRunnerReady  map[string]*waitReady
 
 	Scheduler *scheduler.Scheduler
 
@@ -33,11 +33,11 @@ type waitReady struct {
 
 func NewRuncher() *Runcher {
 	r := &Runcher{
-		runnerLock:          make(map[string]*sync.RWMutex),
-		lk:                  &sync.RWMutex{},
-		runners:             make(map[string]*runtime.Runners),
-		waitUUIDRunnerReady: make(map[string]*waitReady),
-		Scheduler:           scheduler.NewDefaultScheduler(),
+		runnerLock:      make(map[string]*sync.RWMutex),
+		lk:              &sync.RWMutex{},
+		runners:         make(map[string]*runtime.Runners),
+		waitRunnerReady: make(map[string]*waitReady),
+		Scheduler:       scheduler.NewDefaultScheduler(),
 	}
 	return r
 }
@@ -45,7 +45,7 @@ func NewRuncher() *Runcher {
 func (r *Runcher) connectUpstream() error {
 	upstreamSub, err := r.conn.Subscribe("upstream.>", func(msg *nats.Msg) {
 		var req request.RunnerRequest
-		//fmt.Printf("read msg,%s\n", msg.Subject)
+		fmt.Printf("read subject:%s msg:%s\n", msg.Subject, string(msg.Data))
 		err := json.Unmarshal(msg.Data, &req)
 		if err != nil {
 			panic(err)
@@ -100,6 +100,7 @@ func (r *Runcher) handelMsg(reqCtx *request.Context) error {
 		panic(err)
 	}
 	msg.Data = marshal
+	msg.Header.Set("code", "0")
 	err = reqCtx.Msg.RespondMsg(msg)
 	if err != nil {
 		panic(err)

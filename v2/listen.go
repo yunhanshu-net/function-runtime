@@ -13,7 +13,7 @@ func (r *Runcher) connectRunner() error {
 		subject := msg.Header.Get("subject")
 		if msg.Header.Get("connect") == "req" {
 			rd := runnerReady{Err: nil, UUID: uid}
-			ready, ok := r.waitUUIDRunnerReady[uid]
+			ready, ok := r.waitRunnerReady[uid]
 			if ok {
 				ready.ready <- rd
 				fmt.Printf("connect: uid%v subject:%s\n", uid, subject)

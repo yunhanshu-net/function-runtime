@@ -55,7 +55,7 @@ func (r *Runcher) startNewRunner(reqCtx *request.Context) (runner.Runner, error)
 		ready:  ready,
 		runner: runtimeRunner,
 	}
-	r.waitUUIDRunnerReady[uid] = wait
+	r.waitRunnerReady[uid] = wait
 	r.lk.Unlock()
 	now := time.Now()
 	err := newRunner.StartKeepAlive(reqCtx)
@@ -68,7 +68,7 @@ func (r *Runcher) startNewRunner(reqCtx *request.Context) (runner.Runner, error)
 		sub := time.Now().Sub(now)
 		fmt.Printf("建立连接总计耗时：%s\n", sub.String())
 		return newRunner, nil
-	case <-time.After(time.Second * 30):
+	case <-time.After(time.Second * 3):
 		return nil, fmt.Errorf("startNewRunner timeout")
 	}
 
