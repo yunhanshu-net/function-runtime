@@ -29,7 +29,15 @@ import (
 
 func NewCmd(runner *model.Runner) *Cmd {
 	//dir, _ := os.UserHomeDir()
-	dir := "/Users/yy/Desktop/code/github.com/sdk-go/soft"
+	dir := strings.TrimSuffix(os.Getenv("RUNNER_ROOT"), "/")
+	if dir == "" {
+		panic("环境变量需要设置RUNNER_ROOT")
+	}
+
+	//dir = filepath.Join(dir, "soft_cmd")
+	//dir = filepath.Join(dir, runner.User)
+	//dir = filepath.Join(dir, runner.Name)
+	//dir = filepath.Join(dir, runner.Version)
 	fullName := runner.Name
 
 	//这里应该判断本机系统类型
@@ -259,19 +267,20 @@ func (c *Cmd) request(req *request.RunnerRequest) (*response.RunnerResponse, err
 	softPath := fmt.Sprintf("%s/%s", installPath, appName)
 	softPath = strings.ReplaceAll(softPath, "\\", "/")
 	req.Runner.RequestJsonPath = strings.ReplaceAll(req.Runner.RequestJsonPath, "\\", "/")
+	var cc string
 	var cmd *exec.Cmd
 	//split := strings.Split(req.Runner.RequestJsonPath, "/")
 	//reqName := split[len(split)-1]
 	switch runtime.GOOS {
 	case "windows":
-		cc := fmt.Sprintf("cd /D %s && %s %s .request/%s",
+		cc = fmt.Sprintf("cd /D %s && %s %s .request/%s",
 			installPath, appName, req.Runner.Command, fileName)
 		cmd = exec.Command("cmd.exe", "/C", cc)
 	case "linux", "darwin":
 		//cc := fmt.Sprintf("cd  %s && %s %s %s",
 		//	installPath, softPath, req.Command, req.RequestJsonPath)
 
-		cc := fmt.Sprintf("cd %s && ./%s %s .request/%s",
+		cc = fmt.Sprintf("cd %s && ./%s %s .request/%s",
 			installPath, appName, req.Runner.Command, fileName)
 		// Linux和macOS可以直接使用 && 连接命令
 		cmd = exec.Command("sh", "-c", cc)
@@ -286,7 +295,7 @@ func (c *Cmd) request(req *request.RunnerRequest) (*response.RunnerResponse, err
 	cmd.Stdout = &out
 	err = cmd.Run()
 	if err != nil {
-		logrus.Errorf("cmd run err:%s", err.Error())
+		logrus.Errorf("cmd run err:%s cc=:%s", err.Error(), cc)
 		return nil, err
 	}
 	cmdStr = fmt.Sprintf("%s %s %s", softPath, req.Runner.Command, req.Runner.RequestJsonPath)
