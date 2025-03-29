@@ -327,7 +327,7 @@ func (c *Cmd) request(req *request.RunnerRequest) (*response.RunnerResponse, err
 	if res.MetaData == nil {
 		res.MetaData = make(map[string]interface{})
 	}
-	res.MetaData["cost"] = since
+	res.MetaData["runcher_cost"] = since
 	//res.MetaData["mem_b"] = int(i)
 	//err = json.Unmarshal([]byte(outString), &res)
 	//if err != nil {
