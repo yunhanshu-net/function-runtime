@@ -323,11 +323,11 @@ func (c *Cmd) request(req *request.RunnerRequest) (*response.RunnerResponse, err
 	if err != nil {
 		return nil, err
 	}
-	since := time.Since(now).Milliseconds()
+	since := time.Since(now).String()
 	if res.MetaData == nil {
 		res.MetaData = make(map[string]interface{})
 	}
-	res.MetaData["runcher_cost"] = since
+	res.Response.MetaData["runcher_cost"] = since
 	//res.MetaData["mem_b"] = int(i)
 	//err = json.Unmarshal([]byte(outString), &res)
 	//if err != nil {
