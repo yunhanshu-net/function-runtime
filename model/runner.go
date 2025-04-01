@@ -21,33 +21,43 @@ type Runner struct {
 	User            string `json:"user"`       //所属租户
 }
 
+func (r *Runner) GetBuildRunnerName() string {
+	return fmt.Sprintf("%s_%s_%s", r.User, r.Name, r.GetNextVersion())
+}
+
+func (r *Runner) GetBuildPath(root string) string {
+	return fmt.Sprintf("%s/%s/%s/bin", root, r.User, r.Name)
+}
+
 func (r *Runner) GetVersionNum() (int, error) {
 	replace := strings.ReplaceAll(r.Version, "v", "")
 	version, err := strconv.Atoi(replace)
 	if err != nil {
+		fmt.Println(err)
 		return 0, err
 	}
 	return version, nil
 }
 
-func (r *Runner) GetNextVersion() (string, error) {
+func (r *Runner) GetNextVersion() string {
 	num, err := r.GetVersionNum()
 	if err != nil {
-		return "", err
+		fmt.Println("GetVersionNum err:" + err.Error())
 	}
-	return fmt.Sprintf("v%d", num+1), nil
+	return fmt.Sprintf("v%d", num+1)
 }
 
 func (r *Runner) GetInstallPath(rootPath string) string {
-	return fmt.Sprintf("%s/%s/%s/%s", strings.TrimSuffix(rootPath, "/"), r.User, r.Name, r.Version)
+	return fmt.Sprintf("%s/%s/%s/version/%s", strings.TrimSuffix(rootPath, "/"), r.User, r.Name, r.Version)
+}
+
+func (r *Runner) GetToolPath(rootPath string) string {
+	return fmt.Sprintf("%s/%s/%s", strings.TrimSuffix(rootPath, "/"), r.User, r.Name)
 }
 
 func (r *Runner) GetNextVersionInstallPath(rootPath string) (string, error) {
-	nextVersion, err := r.GetNextVersion()
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%s/%s/%s/%s", strings.TrimSuffix(rootPath, "/"), r.User, r.Name, nextVersion), nil
+	nextVersion := r.GetNextVersion()
+	return fmt.Sprintf("%s/%s/%s/version/%s", strings.TrimSuffix(rootPath, "/"), r.User, r.Name, nextVersion), nil
 }
 
 func (r *Runner) Check() error {

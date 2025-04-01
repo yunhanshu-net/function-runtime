@@ -1,4 +1,4 @@
-package v2
+package scheduler
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ type runnerReady struct {
 	Err    error
 }
 
-func (r *Runcher) getRunner(ctx *request.RunnerRequest) (runners *runtime.Runners, exist bool) {
+func (r *Scheduler) getRunner(ctx *request.RunnerRequest) (runners *runtime.Runners, exist bool) {
 	r.lk.Lock()
 	runners, ok := r.runners[ctx.GetSubject()]
 	r.lk.Unlock()
@@ -26,7 +26,7 @@ func (r *Runcher) getRunner(ctx *request.RunnerRequest) (runners *runtime.Runner
 	return runners, true
 }
 
-func (r *Runcher) addRunningRunner(ctx *request.RunnerRequest) (runners *runtime.Runners, exist bool) {
+func (r *Scheduler) addRunningRunner(ctx *request.RunnerRequest) (runners *runtime.Runners, exist bool) {
 	r.lk.Lock()
 	runners, ok := r.runners[ctx.GetSubject()]
 	r.lk.Unlock()
@@ -37,7 +37,7 @@ func (r *Runcher) addRunningRunner(ctx *request.RunnerRequest) (runners *runtime
 }
 
 // 长连接
-func (r *Runcher) startNewRunner(reqCtx *request.Context) (runner.Runner, error) {
+func (r *Scheduler) startNewRunner(reqCtx *request.Context) (runner.Runner, error) {
 	newRunner := runner.NewRunner(reqCtx.Request.Runner)
 	subject := reqCtx.Request.GetSubject()
 	uid := uuid.New().String()
@@ -75,11 +75,11 @@ func (r *Runcher) startNewRunner(reqCtx *request.Context) (runner.Runner, error)
 }
 
 // 临时执行，即刻释放
-func (r *Runcher) execRunner(reqCtx *request.Context) (*response.RunnerResponse, error) {
+func (r *Scheduler) execRunner(reqCtx *request.Context) (*response.RunnerResponse, error) {
 	return nil, nil
 }
 
-func (r *Runcher) runRequest(reqCtx *request.Context) (*response.RunnerResponse, error) {
+func (r *Scheduler) runRequest(reqCtx *request.Context) (*response.RunnerResponse, error) {
 	newRunner := runner.NewRunner(reqCtx.Request.Runner)
 	runnerResponse, err := newRunner.Request(reqCtx)
 	if err != nil {
@@ -88,7 +88,7 @@ func (r *Runcher) runRequest(reqCtx *request.Context) (*response.RunnerResponse,
 	return runnerResponse, nil
 }
 
-func (r *Runcher) removeRunner(subject string, uuid string) {
+func (r *Scheduler) removeRunner(subject string, uuid string) {
 	//r.lk.Lock()
 	//defer r.lk.Unlock()
 	runners := r.runners[subject]

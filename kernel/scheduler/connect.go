@@ -1,4 +1,4 @@
-package v2
+package scheduler
 
 import (
 	"encoding/json"
@@ -6,43 +6,27 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/yunhanshu-net/runcher/model/request"
 	"github.com/yunhanshu-net/runcher/runtime"
-	"github.com/yunhanshu-net/runcher/v2/scheduler"
-	"strings"
 	"sync"
 )
-
-type Runcher struct {
-	conn             *nats.Conn
-	receiveRunnerSub *nats.Subscription
-	upstreamSub      *nats.Subscription
-	manageSub        *nats.Subscription
-	runnerLock       map[string]*sync.RWMutex
-	lk               *sync.RWMutex
-	runners          map[string]*runtime.Runners
-	waitRunnerReady  map[string]*waitReady
-
-	Scheduler *scheduler.Scheduler
-
-	//closeReq        chan string
-}
 
 type waitReady struct {
 	ready  chan runnerReady
 	runner *runtime.Runner
 }
 
-func NewRuncher() *Runcher {
-	r := &Runcher{
+func NewScheduler(conn *nats.Conn) *Scheduler {
+	r := &Scheduler{
 		runnerLock:      make(map[string]*sync.RWMutex),
 		lk:              &sync.RWMutex{},
 		runners:         make(map[string]*runtime.Runners),
 		waitRunnerReady: make(map[string]*waitReady),
-		Scheduler:       scheduler.NewDefaultScheduler(),
+		conn:            conn,
 	}
+
 	return r
 }
 
-func (r *Runcher) connectUpstream() error {
+func (r *Scheduler) connectUpstream() error {
 	upstreamSub, err := r.conn.Subscribe("upstream.>", func(msg *nats.Msg) {
 		var req request.RunnerRequest
 		fmt.Printf("read subject:%s msg:%s\n", msg.Subject, string(msg.Data))
@@ -68,28 +52,7 @@ func (r *Runcher) connectUpstream() error {
 	return nil
 }
 
-func (r *Runcher) connectManage() error {
-	manageSub, err := r.conn.Subscribe("manage.>", func(msg *nats.Msg) {
-
-		subjects := strings.Split(msg.Subject, ".")
-		subject := subjects[1]
-		if subject == "add_api" {
-			fmt.Println("add_api:", string(msg.Data))
-			err := r.AddApi(msg)
-			if err != nil {
-				fmt.Println(err)
-			}
-		}
-
-	})
-	if err != nil {
-		return err
-	}
-	r.manageSub = manageSub
-	return nil
-}
-
-func (r *Runcher) handelMsg(reqCtx *request.Context) error {
+func (r *Scheduler) handelMsg(reqCtx *request.Context) error {
 	runnerResponse, err := r.request(reqCtx)
 	if err != nil {
 		panic(err)
@@ -107,18 +70,9 @@ func (r *Runcher) handelMsg(reqCtx *request.Context) error {
 	}
 	return nil
 }
-func (r *Runcher) Run() error {
-	conn, err := nats.Connect(nats.DefaultURL)
-	if err != nil {
-		return err
-	}
-	r.conn = conn
+func (r *Scheduler) Run() error {
 
-	err = r.connectUpstream()
-	if err != nil {
-		return err
-	}
-	err = r.connectManage()
+	err := r.connectUpstream()
 	if err != nil {
 		return err
 	}
@@ -131,5 +85,42 @@ func (r *Runcher) Run() error {
 	return nil
 }
 
-func (r *Runcher) Close() {
+func (r *Scheduler) Close() {
+}
+
+func (r *Scheduler) connectRunner() error {
+
+	subscribe, err := r.conn.Subscribe("runcher.>", func(msg *nats.Msg) {
+		//接收来自runner的连接和关闭请求
+		uid := msg.Header.Get("uuid")
+		subject := msg.Header.Get("subject")
+		if msg.Header.Get("connect") == "req" {
+			rd := runnerReady{Err: nil, UUID: uid}
+			ready, ok := r.waitRunnerReady[uid]
+			if ok {
+				ready.ready <- rd
+				fmt.Printf("connect: uid%v subject:%s\n", uid, subject)
+			} else {
+			}
+			newMsg := nats.NewMsg(msg.Subject)
+			newMsg.Header.Set("status", "success")
+			msg.RespondMsg(newMsg)
+		}
+
+		if msg.Header.Get("close") == "req" {
+			//runner 关闭连接
+			//r.waitRunnerReady["uuid"] <- runnerReady{Err: nil, UUID: uuid}
+			fmt.Printf("close: uid:%v subject:%s\n", uid, subject)
+			r.removeRunner(subject, uid)
+			newMsg := nats.NewMsg(msg.Subject)
+			newMsg.Header.Set("status", "success")
+			msg.RespondMsg(newMsg)
+		}
+
+	})
+	if err != nil {
+		return err
+	}
+	r.receiveRunnerSub = subscribe
+	return nil
 }

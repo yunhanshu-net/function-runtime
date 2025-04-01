@@ -1,4 +1,4 @@
-package v2
+package scheduler
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func (r *Runcher) request(ctx *request.Context) (*response.RunnerResponse, error) {
+func (r *Scheduler) request(ctx *request.Context) (*response.RunnerResponse, error) {
 	subject := ctx.Request.GetSubject()
 	ctx.Conn = r.conn
 	r.lk.Lock()

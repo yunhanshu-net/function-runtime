@@ -25,6 +25,7 @@ func (e *Error) Error() string {
 }
 
 var (
-	ErrorCodeApiFileExist  = &Error{Code: 10001, Message: "该目录或文件已存在"}
-	ErrorCodeApiBuildError = &Error{Code: 10002, Message: "项目重新编译失败"}
+	ErrorCodeApiFileExist       = &Error{Code: 10001, Message: "该目录或文件已存在"}
+	ErrorCodeApiBuildError      = &Error{Code: 10002, Message: "项目重新编译失败"}
+	ErrorCodeApiPackageNotExist = &Error{Code: 10003, Message: "该目录或文件不存在"}
 )
