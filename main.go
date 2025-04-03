@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/yunhanshu-net/runcher/kernel"
-	_ "net/http/pprof"
 )
 
 func main() {

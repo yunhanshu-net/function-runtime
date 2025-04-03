@@ -40,9 +40,19 @@ type WebSite struct {
 	response.InstallInfo
 }
 
-func (w *WebSite) AddApi(runnerRoot string, runner *model.Runner, codeApi *codex.CodeApi) error {
-	//todo not support
-	return fmt.Errorf("not support")
+func (w *WebSite) AddBizPackage(codeBizPackage *codex.BizPackage) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (w *WebSite) AddApi(codeApi *codex.CodeApi) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (w *WebSite) CreateProject() error {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (w *WebSite) Stop() error {

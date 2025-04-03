@@ -14,10 +14,13 @@ import (
 
 type Golang struct {
 	runnerRoot string
+	runner     *model.Runner
 }
 
-func (g *Golang) AddApi(runnerRoot string, runner *model.Runner, codeApi *codex.CodeApi) error {
+func (g *Golang) AddApi(codeApi *codex.CodeApi) error {
 	//nextVersion := runner.GetNextVersion()
+	runnerRoot := g.runnerRoot
+	runner := g.runner
 	currentVersionWorkPath := runner.GetInstallPath(runnerRoot)
 	nextVersionWorkPath, err := runner.GetNextVersionInstallPath(runnerRoot)
 	if err != nil {
@@ -95,17 +98,9 @@ func (g *Golang) buildRunner(workDir string, buildPath string, runnerName string
 	return nil
 }
 
-func (g *Golang) AddBizPackage(runner *model.Runner, codeBizPackage *codex.BizPackage) error {
-
-	//nextVersion, err := runner.GetNextVersion()
-	//if err != nil {
-	//	return err
-	//}
+func (g *Golang) AddBizPackage(codeBizPackage *codex.BizPackage) error {
+	runner := g.runner
 	currentVersionPath := runner.GetInstallPath(g.runnerRoot)
-	//nextVersionPath, err := runner.GetNextVersionInstallPath(g.runnerRoot)
-	//if err != nil {
-	//	return err
-	//}
 	_, absPkgPath := codeBizPackage.GetPackageSaveFullPath(currentVersionPath)
 	if osx.DirExists(absPkgPath) { //先判断Package是否存在
 		return status.ErrorCodeApiFileExist.WithMessage(absPkgPath)
@@ -135,7 +130,8 @@ func (g *Golang) AddBizPackage(runner *model.Runner, codeBizPackage *codex.BizPa
 	return nil
 }
 
-func (g *Golang) CreateProject(runner *model.Runner) error {
+func (g *Golang) CreateProject() error {
+	runner := g.runner
 	err := os.MkdirAll(runner.GetToolPath(g.runnerRoot), 0755) //初始化项目目录
 	if err != nil {
 		return err
@@ -144,8 +140,9 @@ func (g *Golang) CreateProject(runner *model.Runner) error {
 	//go.mod
 	//main.go
 	//bin
-	//	app_v1
-	//  app_v2
+	//	.request
+	//	user_app_v1
+	//  user_app_v2
 	//version
 	//	-v1
 	//		-api
@@ -162,7 +159,7 @@ func (g *Golang) CreateProject(runner *model.Runner) error {
 		return err
 	}
 
-	err = os.MkdirAll(runner.GetToolPath(g.runnerRoot)+"/bin", 0755) //初始化可执行程序目录
+	err = os.MkdirAll(runner.GetToolPath(g.runnerRoot)+"/bin/.request", 0755) //初始化可执行程序目录
 	if err != nil {
 		return err
 	}

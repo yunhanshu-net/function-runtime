@@ -10,7 +10,6 @@ import (
 	"github.com/yunhanshu-net/runcher/model"
 	"github.com/yunhanshu-net/runcher/model/request"
 	"github.com/yunhanshu-net/runcher/model/response"
-	"github.com/yunhanshu-net/runcher/pkg/codex"
 	"github.com/yunhanshu-net/runcher/pkg/compress"
 	"github.com/yunhanshu-net/runcher/pkg/jsonx"
 	"github.com/yunhanshu-net/runcher/pkg/osx"
@@ -33,11 +32,6 @@ func NewCmd(runner *model.Runner) *Cmd {
 	if dir == "" {
 		panic("环境变量需要设置RUNNER_ROOT")
 	}
-
-	//dir = filepath.Join(dir, "soft_cmd")
-	//dir = filepath.Join(dir, runner.User)
-	//dir = filepath.Join(dir, runner.Name)
-	//dir = filepath.Join(dir, runner.Version)
 	fullName := runner.Name
 
 	//这里应该判断本机系统类型
@@ -48,7 +42,14 @@ func NewCmd(runner *model.Runner) *Cmd {
 		fullName += ".exe"
 	}
 
+	//cmd程序有多种实现，可能是go，可能是rust，可能是c++,v等等各种，所以coder需要根据不同的系统类型来选择不同的实现
+	newCoder, err := coder.NewCoder(runner)
+	if err != nil {
+		panic(err)
+	}
+
 	return &Cmd{
+		Coder: newCoder,
 		InstallInfo: response.InstallInfo{
 			TempPath:     filepath.Join(os.TempDir(), runner.ToolType),
 			RootPath:     dir,
@@ -66,6 +67,7 @@ func (c *Cmd) GetAppName() string {
 }
 
 type Cmd struct {
+	coder.Coder
 	response.InstallInfo
 	process *os.Process
 	uuid    string
@@ -218,28 +220,6 @@ func (c *Cmd) start() {
 
 }
 
-// func (c *Cmd) keepAlive(req *request.Context, ctx *Context) (*response.RunnerResponse, error) {
-//
-//		var res response.RunnerResponse
-//		if ctx.Transport.GetConfig().TransportType != transport.TypeNats {
-//			return nil, fmt.Errorf("cmd keepAlive not support transport type: %s", ctx.Transport.GetConfig().TransportType)
-//		}
-//		conn := ctx.Transport.GetConn().(*nats.Conn)
-//
-//		if req.Timeout == 0 {
-//			req.Timeout = 60
-//		}
-//
-//		msg, err := conn.Request(req.GetSubject(), req.Bytes(), time.Second*time.Duration(req.Timeout))
-//		if err != nil {
-//			return nil, err
-//		}
-//		err = json.Unmarshal(msg.Data, &res)
-//		if err != nil {
-//			return nil, err
-//		}
-//		return &res, nil
-//	}
 func (c *Cmd) request(req *request.RunnerRequest) (*response.RunnerResponse, error) {
 	var (
 		cmdStr    string
@@ -273,15 +253,15 @@ func (c *Cmd) request(req *request.RunnerRequest) (*response.RunnerResponse, err
 	//reqName := split[len(split)-1]
 	switch runtime.GOOS {
 	case "windows":
-		cc = fmt.Sprintf("cd /D %s && %s %s .request/%s",
-			installPath, appName, req.Runner.Command, fileName)
+		cc = fmt.Sprintf("cd /D %s && ./bin/%s %s .request/%s",
+			installPath, req.Runner.GetBuildRunnerName()+".exe", req.Runner.Command, fileName)
 		cmd = exec.Command("cmd.exe", "/C", cc)
 	case "linux", "darwin":
 		//cc := fmt.Sprintf("cd  %s && %s %s %s",
 		//	installPath, softPath, req.Command, req.RequestJsonPath)
 
-		cc = fmt.Sprintf("cd %s && ./%s %s .request/%s",
-			installPath, appName, req.Runner.Command, fileName)
+		cc = fmt.Sprintf("cd %s && ./bin/%s %s .request/%s",
+			installPath, req.Runner.GetBuildRunnerName(), req.Runner.Command, fileName)
 		// Linux和macOS可以直接使用 && 连接命令
 		cmd = exec.Command("sh", "-c", cc)
 	default:
@@ -384,17 +364,4 @@ func (c *Cmd) GetInstance() interface{} {
 
 func (c *Cmd) GetUUID() string {
 	return c.uuid
-}
-
-func (c *Cmd) AddApi(runnerRoot string, runner *model.Runner, codeApi *codex.CodeApi) error {
-
-	newCoder, err := coder.NewCoder(runner.Language)
-	if err != nil {
-		return err
-	}
-	err = newCoder.AddApi(runnerRoot, runner, codeApi)
-	if err != nil {
-		return err
-	}
-	return nil
 }

@@ -6,19 +6,7 @@ import (
 	"github.com/yunhanshu-net/runcher/model/response"
 	"github.com/yunhanshu-net/runcher/pkg/store"
 	"github.com/yunhanshu-net/runcher/runner/coder"
-	"sync"
 )
-
-type RuntimeInfo struct {
-	RunCount int
-	AvgQPS   int
-	AvgMem   int
-	Lock     *sync.Mutex
-}
-
-type Control struct {
-	RunningRunners map[string]*RuntimeInfo
-}
 
 func NewRunner(runner *model.Runner) Runner {
 	switch runner.ToolType {

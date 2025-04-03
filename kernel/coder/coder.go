@@ -39,12 +39,25 @@ func (s *Coder) connectManage() error {
 
 		subjects := strings.Split(msg.Subject, ".")
 		subject := subjects[1]
+		var err error
 		if subject == "add_api" {
 			fmt.Println("add_api:", string(msg.Data))
-			err := s.addApi(msg)
+			err = s.addApi(msg)
 			if err != nil {
 				fmt.Println(err)
 			}
+		}
+
+		newMsg := nats.NewMsg(msg.Subject)
+		if err != nil {
+			newMsg.Header.Set("code", "-1")
+			newMsg.Header.Set("msg", err.Error())
+		} else {
+			newMsg.Header.Set("code", "0")
+		}
+		err = msg.RespondMsg(newMsg)
+		if err != nil {
+			panic(err)
 		}
 
 	})
