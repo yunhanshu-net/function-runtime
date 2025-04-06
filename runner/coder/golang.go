@@ -21,13 +21,15 @@ func (g *Golang) AddApi(codeApi *codex.CodeApi) error {
 	//nextVersion := runner.GetNextVersion()
 	runnerRoot := g.runnerRoot
 	runner := g.runner
-	currentVersionWorkPath := runner.GetInstallPath(runnerRoot)
-	nextVersionWorkPath, err := runner.GetNextVersionInstallPath(runnerRoot)
-	if err != nil {
-		return err
-	}
+	//currentVersionWorkPath := runner.GetInstallPath(runnerRoot)
+	pathInfo := runner.GetPaths(runnerRoot)
+	//nextVersionWorkPath, err := runner.GetNextVersionInstallPath(runnerRoot)
+	//if err != nil {
+	//	return err
+	//}
+	codeApi.Language = g.runner.Language
 
-	addFileSavePath, addFileAbsFile := codeApi.GetFileSaveFullPath(nextVersionWorkPath)
+	addFileSavePath, addFileAbsFile := codeApi.GetFileSaveFullPath(pathInfo.NextVersionPath)
 	if osx.DirExists(addFileSavePath) { //先判断package是否存在
 		return status.ErrorCodeApiFileExist.WithMessage(addFileSavePath)
 	}
@@ -37,14 +39,51 @@ func (g *Golang) AddApi(codeApi *codex.CodeApi) error {
 		return status.ErrorCodeApiFileExist.WithMessage(addFileAbsFile)
 	}
 
+	//假如当前版本是v1，新增一个api，直接编译当前v1目录的main.go文件，
+	//失败了就把当前目录改为v1_err把v1_bak复制一份为v1，回滚为失败前的代码
+	//编译成功后把v1改为v2 把v1_bak改为v1 把当前v2目录copy一份到v2_bak保证每次编译成功后都有源码的备份文件
+	//err := g.createFile(addFileAbsFile, codeApi.Code)
+	//if err != nil {
+	//	return err
+	//}
+	//err = g.buildRunner(pathInfo.CurrentVersionPath, runner.GetBuildPath(runnerRoot), runner.GetBuildRunnerName())
+	//if err != nil {
+	//	//失败了就把当前目录改为v1_err把v1_bak复制一份为v1，回滚为失败前的代码
+	//	err := os.Rename(pathInfo.CurrentVersionPath, pathInfo.CurrentVersionErrPath)
+	//	if err != nil {
+	//		fmt.Printf(" os.Rename(pathInfo.CurrentVersionPath, pathInfo.CurrentVersionErrPath) err:%s:%+v\n", err, pathInfo)
+	//	}
+	//	err = osx.CopyDirectory(pathInfo.CurrentVersionBakPath, pathInfo.CurrentVersionPath) //把v1_bak复制一份为v1，回滚为失败前的代码
+	//	if err != nil {
+	//		return err
+	//	}
+	//
+	//	return err
+	//}
+	//
+	////下面三个操作可以异步后台慢慢执行
+	//err = os.Rename(pathInfo.CurrentVersionPath, pathInfo.NextVersionPath)
+	//if err != nil {
+	//	return err
+	//}
+	//err = os.Rename(pathInfo.CurrentVersionBakPath, pathInfo.CurrentVersionPath)
+	//if err != nil {
+	//	return err
+	//}
+	//err = osx.CopyDirectory(pathInfo.NextVersionPath, pathInfo.NextVersionBakPath)
+	//if err != nil {
+	//	return err
+	//}
+
+	//
 	//创建新版本工作目录
-	err = os.MkdirAll(nextVersionWorkPath, 0755)
+	err := os.MkdirAll(pathInfo.NextVersionPath, 0755)
 	if err != nil {
 		return err
 	}
 
 	//copy 旧代码到新版本工作目录
-	err = osx.CopyDirectory(currentVersionWorkPath, nextVersionWorkPath) //把当前项目代码保存一份复制到下一个版本
+	err = osx.CopyDirectory(pathInfo.CurrentVersionPath, pathInfo.NextVersionPath) //把当前项目代码保存一份复制到下一个版本
 	if err != nil {
 		return err
 	}
@@ -53,10 +92,11 @@ func (g *Golang) AddApi(codeApi *codex.CodeApi) error {
 	if err != nil {
 		return err
 	}
-	err = g.buildRunner(nextVersionWorkPath, runner.GetBuildPath(runnerRoot), runner.GetBuildRunnerName())
+	err = g.buildRunner(pathInfo.NextVersionPath, runner.GetBuildPath(runnerRoot), runner.GetBuildRunnerName())
 	if err != nil {
 		return err
 	}
+	//return nil
 	return nil
 }
 
@@ -168,7 +208,7 @@ func (g *Golang) CreateProject() error {
 	err = g.createFile(codePath+"/go.mod", fmt.Sprintf(`
 module git.yunhanshu.net/%s/%s
 
-go 1.23.4`, runner.User, runner.Name))
+go 1.23`, runner.User, runner.Name))
 	if err != nil {
 		return err
 	}
@@ -178,6 +218,9 @@ go 1.23.4`, runner.User, runner.Name))
 	if err != nil {
 		return err
 	}
-
+	err = g.buildRunner(codePath, runner.GetBuildPath(g.runnerRoot), runner.GetBuildRunnerCurrentVersionName())
+	if err != nil {
+		return err
+	}
 	return nil
 }

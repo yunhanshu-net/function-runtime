@@ -16,7 +16,7 @@ type runnerReady struct {
 	Err    error
 }
 
-func (r *Scheduler) getRunner(ctx *request.RunnerRequest) (runners *runtime.Runners, exist bool) {
+func (r *Scheduler) getRunner(ctx *request.Request) (runners *runtime.Runners, exist bool) {
 	r.lk.Lock()
 	runners, ok := r.runners[ctx.GetSubject()]
 	r.lk.Unlock()
@@ -26,7 +26,7 @@ func (r *Scheduler) getRunner(ctx *request.RunnerRequest) (runners *runtime.Runn
 	return runners, true
 }
 
-func (r *Scheduler) addRunningRunner(ctx *request.RunnerRequest) (runners *runtime.Runners, exist bool) {
+func (r *Scheduler) addRunningRunner(ctx *request.Request) (runners *runtime.Runners, exist bool) {
 	r.lk.Lock()
 	runners, ok := r.runners[ctx.GetSubject()]
 	r.lk.Unlock()
@@ -46,6 +46,7 @@ func (r *Scheduler) startNewRunner(reqCtx *request.Context) (runner.Runner, erro
 	r.lk.Lock()
 	ready := make(chan runnerReady, 1)
 	runtimeRunner := &runtime.Runner{
+		Conn:      r.conn,
 		UUID:      uid,
 		StartTime: time.Now(),
 		Instance:  newRunner,
@@ -68,18 +69,18 @@ func (r *Scheduler) startNewRunner(reqCtx *request.Context) (runner.Runner, erro
 		sub := time.Now().Sub(now)
 		fmt.Printf("建立连接总计耗时：%s\n", sub.String())
 		return newRunner, nil
-	case <-time.After(time.Second * 3):
+	case <-time.After(time.Second * 10):
 		return nil, fmt.Errorf("startNewRunner timeout")
 	}
 
 }
 
 // 临时执行，即刻释放
-func (r *Scheduler) execRunner(reqCtx *request.Context) (*response.RunnerResponse, error) {
+func (r *Scheduler) execRunner(reqCtx *request.Context) (*response.Response, error) {
 	return nil, nil
 }
 
-func (r *Scheduler) runRequest(reqCtx *request.Context) (*response.RunnerResponse, error) {
+func (r *Scheduler) runRequest(reqCtx *request.Context) (*response.Response, error) {
 	newRunner := runner.NewRunner(reqCtx.Request.Runner)
 	runnerResponse, err := newRunner.Request(reqCtx)
 	if err != nil {

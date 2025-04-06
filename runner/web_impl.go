@@ -23,14 +23,14 @@ func NewWebSite(runner *model.Runner) *WebSite {
 	return &WebSite{
 		Host: "http://cdn.geeleo.com",
 		InstallInfo: response.InstallInfo{
-			TempPath:     filepath.Join(os.TempDir(), runner.ToolType),
-			RootPath:     dir,
-			StoreRoot:    runner.StoreRoot,
-			Name:         runner.Name,
-			FullName:     fullName,
-			User:         runner.User,
-			Version:      runner.Version,
-			DownloadPath: runner.OssPath,
+			//TempPath:     filepath.Join(os.TempDir(), runner.ToolType),
+			RootPath: dir,
+			//StoreRoot:    runner.StoreRoot,
+			Name:     runner.Name,
+			FullName: fullName,
+			User:     runner.User,
+			Version:  runner.Version,
+			//DownloadPath: runner.OssPath,
 		},
 	}
 }
@@ -201,7 +201,7 @@ func (w *WebSite) StartKeepAlive(ctx *request.Context) error {
 	return nil
 }
 
-func (w *WebSite) Request(ctx *request.Context) (*response.RunnerResponse, error) {
+func (w *WebSite) Request(ctx *request.Context) (*response.Response, error) {
 	//TODO implement me
 	panic("implement me")
 }

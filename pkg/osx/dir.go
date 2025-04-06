@@ -134,3 +134,19 @@ func CheckDirectChildren(baseDir string) (files []string, dirs []string, err err
 
 	return files, dirs, nil
 }
+
+// CountDirectories 统计指定路径下的目录数量
+func CountDirectories(path string) (int, error) {
+	entries, err := os.ReadDir(path) // 读取目录内容
+	if err != nil {
+		return 0, err
+	}
+
+	count := 0
+	for _, entry := range entries {
+		if entry.IsDir() { // 判断是否为目录
+			count++
+		}
+	}
+	return count, nil
+}

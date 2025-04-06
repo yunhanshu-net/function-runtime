@@ -12,6 +12,7 @@ type Scheduler struct {
 	upstreamSub      *nats.Subscription
 	manageSub        *nats.Subscription
 	runnerLock       map[string]*sync.RWMutex
+	runnerLockLock   *sync.RWMutex
 	lk               *sync.RWMutex
 	runners          map[string]*runtime.Runners
 	waitRunnerReady  map[string]*waitReady

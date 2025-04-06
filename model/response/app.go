@@ -32,7 +32,7 @@ type InstallInfo struct {
 type UpdateVersion struct {
 }
 
-//type Response struct {
+//type RunnerResponse struct {
 //	Code    int         `json:"code"`
 //	Message string      `json:"message"`
 //	Data    interface{} `json:"data"`

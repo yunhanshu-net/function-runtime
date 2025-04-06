@@ -9,17 +9,17 @@ import (
 )
 
 func NewRunner(runner *model.Runner) Runner {
-	switch runner.ToolType {
-	case "windows", "linux", "macos", "可执行程序(linux)", "可执行程序(windows)":
-		return NewCmd(runner)
-	case "website":
-		return NewWebSite(runner)
-	case "docker":
-		//	todo 待实现
-	case "python":
-		//	todo 待实现
-
-	}
+	//switch runner.ToolType {
+	//case "windows", "linux", "macos", "可执行程序(linux)", "可执行程序(windows)":
+	//	return NewCmd(runner)
+	//case "website":
+	//	return NewWebSite(runner)
+	//case "docker":
+	//	//	todo 待实现
+	//case "python":
+	//	//	todo 待实现
+	//
+	//}
 	return NewCmd(runner)
 }
 
@@ -30,7 +30,7 @@ type Runner interface {
 	UnInstall() (unInstallInfo *response.UnInstallInfo, err error)                                            //卸载
 	UpdateVersion(up *model.UpdateVersion, fileStore store.FileStore) (*response.UpdateVersion, error)        //更新版本
 	RollbackVersion(r *request.RollbackVersion, fileStore store.FileStore) (*response.RollbackVersion, error) //版本回滚
-	Request(ctx *request.Context) (*response.RunnerResponse, error)                                           //运行程序
+	Request(ctx *request.Context) (*response.Response, error)                                                 //运行程序
 
 	GetUUID() string
 

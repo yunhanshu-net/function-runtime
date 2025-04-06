@@ -7,6 +7,7 @@ import (
 	"github.com/yunhanshu-net/runcher/model/request"
 	"github.com/yunhanshu-net/runcher/runtime"
 	"sync"
+	"time"
 )
 
 type waitReady struct {
@@ -17,6 +18,7 @@ type waitReady struct {
 func NewScheduler(conn *nats.Conn) *Scheduler {
 	r := &Scheduler{
 		runnerLock:      make(map[string]*sync.RWMutex),
+		runnerLockLock:  &sync.RWMutex{},
 		lk:              &sync.RWMutex{},
 		runners:         make(map[string]*runtime.Runners),
 		waitRunnerReady: make(map[string]*waitReady),
@@ -28,7 +30,7 @@ func NewScheduler(conn *nats.Conn) *Scheduler {
 
 func (r *Scheduler) connectUpstream() error {
 	upstreamSub, err := r.conn.Subscribe("upstream.>", func(msg *nats.Msg) {
-		var req request.RunnerRequest
+		var req request.Request
 		fmt.Printf("read subject:%s msg:%s\n", msg.Subject, string(msg.Data))
 		err := json.Unmarshal(msg.Data, &req)
 		if err != nil {
@@ -39,7 +41,7 @@ func (r *Scheduler) connectUpstream() error {
 			Msg:     msg,
 			Request: &req,
 		}
-		err = r.handelMsg(msgCtx)
+		err = r.handelNatsMsg(msgCtx)
 		if err != nil {
 			panic(err)
 		}
@@ -52,12 +54,12 @@ func (r *Scheduler) connectUpstream() error {
 	return nil
 }
 
-func (r *Scheduler) handelMsg(reqCtx *request.Context) error {
-	runnerResponse, err := r.request(reqCtx)
+func (r *Scheduler) handelNatsMsg(reqCtx *request.Context) error {
+	runnerResponse, err := r.Request(reqCtx)
 	if err != nil {
 		panic(err)
 	}
-	msg := nats.NewMsg(reqCtx.Msg.Subject)
+	msg := nats.NewMsg(reqCtx.GetSubject())
 	marshal, err := json.Marshal(runnerResponse)
 	if err != nil {
 		panic(err)
@@ -70,6 +72,7 @@ func (r *Scheduler) handelMsg(reqCtx *request.Context) error {
 	}
 	return nil
 }
+
 func (r *Scheduler) Run() error {
 
 	err := r.connectUpstream()
@@ -81,7 +84,16 @@ func (r *Scheduler) Run() error {
 	if err != nil {
 		return err
 	}
-
+	go func() {
+		for {
+			select {
+			case <-time.After(time.Second * 1):
+				for s, runners := range r.runners {
+					fmt.Println(s, runners.Running)
+				}
+			}
+		}
+	}()
 	return nil
 }
 

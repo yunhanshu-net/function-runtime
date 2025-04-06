@@ -51,13 +51,13 @@ func NewCmd(runner *model.Runner) *Cmd {
 	return &Cmd{
 		Coder: newCoder,
 		InstallInfo: response.InstallInfo{
-			TempPath:     filepath.Join(os.TempDir(), runner.ToolType),
-			RootPath:     dir,
-			Name:         runner.Name,
-			FullName:     fullName,
-			User:         runner.User,
-			Version:      runner.Version,
-			DownloadPath: runner.OssPath,
+			//TempPath:     filepath.Join(os.TempDir(), runner.ToolType),
+			RootPath: dir,
+			Name:     runner.Name,
+			FullName: fullName,
+			User:     runner.User,
+			Version:  runner.Version,
+			//DownloadPath: runner.OssPath,
 		},
 	}
 }
@@ -94,6 +94,15 @@ func (c *Cmd) GetInstallPath() string {
 	//	return abs
 	//}
 	return fmt.Sprintf("%s/%s/%s/%s", c.RootPath, c.User, c.Name, c.Version)
+}
+
+func (c *Cmd) GetBinPath() string {
+	//abs, err := filepath.Abs(fmt.Sprintf("%s/%s/%s/%s", c.RootPath, c.User, c.Name, c.Version))
+	//if err != nil {
+	//	panic(err)
+	//	return abs
+	//}
+	return fmt.Sprintf("%s/%s/%s/bin", c.RootPath, c.User, c.Name)
 }
 
 // Chmod mac和linux需要授予执行权限
@@ -220,17 +229,17 @@ func (c *Cmd) start() {
 
 }
 
-func (c *Cmd) request(req *request.RunnerRequest) (*response.RunnerResponse, error) {
+func (c *Cmd) request(req *request.Request) (*response.Response, error) {
 	var (
 		cmdStr    string
 		err       error
 		outString string
-		res       response.RunnerResponse
+		res       response.Response
 	)
 	fileName := strconv.Itoa(int(time.Now().UnixMicro())) + ".json"
-	req.Runner.WorkPath = c.GetInstallPath() //软件安装目录
-	req.Runner.RequestJsonPath = req.Runner.WorkPath + "/.request/" + fileName
-	err = jsonx.SaveFile(req.Runner.RequestJsonPath, req) //todo 存储请求参数
+	//req.Runner.WorkPath = c.GetBinPath() //软件安装目录
+	requestJsonPath := c.GetBinPath() + "/.request/" + fileName
+	err = jsonx.SaveFile(requestJsonPath, req) //todo 存储请求参数
 	if err != nil {
 		return nil, err
 	}
@@ -242,11 +251,11 @@ func (c *Cmd) request(req *request.RunnerRequest) (*response.RunnerResponse, err
 		}
 	}()
 	now := time.Now()
-	installPath := c.GetInstallPath()
-	appName := c.GetAppName()
-	softPath := fmt.Sprintf("%s/%s", installPath, appName)
-	softPath = strings.ReplaceAll(softPath, "\\", "/")
-	req.Runner.RequestJsonPath = strings.ReplaceAll(req.Runner.RequestJsonPath, "\\", "/")
+	installPath := c.GetBinPath()
+	//appName := c.GetAppName()
+	//softPath := installPath
+	//softPath = strings.ReplaceAll(softPath, "\\", "/")
+	requestJsonPath = strings.ReplaceAll(requestJsonPath, "\\", "/")
 	var cc string
 	var cmd *exec.Cmd
 	//split := strings.Split(req.Runner.RequestJsonPath, "/")
@@ -254,19 +263,19 @@ func (c *Cmd) request(req *request.RunnerRequest) (*response.RunnerResponse, err
 	switch runtime.GOOS {
 	case "windows":
 		cc = fmt.Sprintf("cd /D %s && ./bin/%s %s .request/%s",
-			installPath, req.Runner.GetBuildRunnerName()+".exe", req.Runner.Command, fileName)
+			installPath, req.Runner.GetBuildRunnerName()+".exe", req.Request.Route, fileName)
 		cmd = exec.Command("cmd.exe", "/C", cc)
 	case "linux", "darwin":
 		//cc := fmt.Sprintf("cd  %s && %s %s %s",
 		//	installPath, softPath, req.Command, req.RequestJsonPath)
 
-		cc = fmt.Sprintf("cd %s && ./bin/%s %s .request/%s",
-			installPath, req.Runner.GetBuildRunnerName(), req.Runner.Command, fileName)
+		cc = fmt.Sprintf("cd %s && ./%s %s .request/%s",
+			installPath, req.Runner.GetBuildRunnerCurrentVersionName(), req.Request.Route, fileName)
 		// Linux和macOS可以直接使用 && 连接命令
 		cmd = exec.Command("sh", "-c", cc)
 	default:
-		cmd = exec.Command(softPath, req.Runner.Command, req.Runner.RequestJsonPath)
-		fmt.Printf("cmd call err:%s exec:%s ", err, cmdStr)
+		//cmd = exec.Command(installPath, req.Runner.Command, req.Runner.RequestJsonPath)
+		//fmt.Printf("cmd call err:%s exec:%s ", err, cmdStr)
 	}
 
 	//cmd := exec.Command(softPath, req.Command, req.RequestJsonPath)
@@ -278,7 +287,7 @@ func (c *Cmd) request(req *request.RunnerRequest) (*response.RunnerResponse, err
 		logrus.Errorf("cmd run err:%s cc=:%s", err.Error(), cc)
 		return nil, err
 	}
-	cmdStr = fmt.Sprintf("%s %s %s", softPath, req.Runner.Command, req.Runner.RequestJsonPath)
+	//cmdStr = fmt.Sprintf("%s %s %s", installPath, req.Runner.Command, req.Runner.RequestJsonPath)
 	outString = out.String()
 	if outString == "" {
 		//todo
@@ -294,7 +303,7 @@ func (c *Cmd) request(req *request.RunnerRequest) (*response.RunnerResponse, err
 	//	return nil, err
 	//}
 
-	resList := stringsx.ParserHtmlTagContent(outString, "Response")
+	resList := stringsx.ParserHtmlTagContent(outString, "RunnerResponse")
 	if len(resList) == 0 {
 		//todo 请使用sdk开发软件
 		return nil, fmt.Errorf("soft call err 请使用sdk开发软件")
@@ -328,12 +337,12 @@ func (c *Cmd) StartKeepAlive(ctx *request.Context) error {
 		//cc := fmt.Sprintf("cd  %s && %s %s %s",
 		//	installPath, softPath, req.Command, req.RequestJsonPath)
 
-		path := c.GetInstallPath() + "/.request/" + uuid.New().String() + ".json"
+		path := c.GetBinPath() + "/.request/" + uuid.New().String() + ".json"
 		err := jsonx.SaveFile(path, ctx.Request)
 		if err != nil {
 			return err
 		}
-		cc := fmt.Sprintf("cd %s && ./%s _connect %s", c.GetInstallPath(), c.GetAppName(), path)
+		cc := fmt.Sprintf("cd %s && ./%s _connect %s", c.GetBinPath(), ctx.Request.Runner.GetBuildRunnerCurrentVersionName(), path)
 		// Linux和macOS可以直接使用 && 连接命令
 		cmd = exec.Command("sh", "-c", cc)
 	}
@@ -350,7 +359,7 @@ func (c *Cmd) StartKeepAlive(ctx *request.Context) error {
 	return nil
 }
 
-func (c *Cmd) Request(ctx *request.Context) (*response.RunnerResponse, error) {
+func (c *Cmd) Request(ctx *request.Context) (*response.Response, error) {
 	return c.request(ctx.Request)
 }
 

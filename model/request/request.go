@@ -6,16 +6,18 @@ import (
 	"github.com/yunhanshu-net/runcher/model"
 )
 
-type Request struct {
-	UUID    string                 `json:"uuid"`
-	TraceID string                 `json:"trace_id"`
-	Route   string                 `json:"route"`
-	Method  string                 `json:"method"`
-	Headers map[string]string      `json:"headers"`
-	Body    map[string]interface{} `json:"body"` //请求json
-	FileMap map[string][]string    `json:"file_map"`
+type RunnerRequest struct {
+	UUID    string              `json:"uuid"`
+	TraceID string              `json:"trace_id"`
+	Route   string              `json:"route"`
+	Method  string              `json:"method"`
+	Headers map[string]string   `json:"headers"`
+	Body    interface{}         `json:"body"` //请求json
+	FileMap map[string][]string `json:"file_map"`
 }
 
+type Ping struct {
+}
 type Runner struct {
 	Command         string `json:"command"`
 	WorkPath        string `json:"work_path"`
@@ -24,23 +26,26 @@ type Runner struct {
 	Version         string `json:"version"`
 	RequestJsonPath string `json:"request_json_path"`
 }
-type RunnerRequest struct {
+type Request struct {
 	UUID            string                 `json:"uuid"`
 	Timeout         int                    `json:"timeout"`
 	Runner          *model.Runner          `json:"runner"`
 	TransportConfig *TransportConfig       `json:"transport_config"`
 	Metadata        map[string]interface{} `json:"metadata"`
-	Request         *Request               `json:"request"`
+	//RunnerRequest         *Request               `json:"request"`
+	Request *RunnerRequest `json:"request"`
 }
 
 type TransportConfig struct {
-	Type string `json:"type"`
+	IdleTime int                    `json:"idle_time"`
+	Type     string                 `json:"type"`
+	Metadata map[string]interface{} `json:"metadata"`
 }
 
-func (r *RunnerRequest) GetSubject() string {
+func (r *Request) GetSubject() string {
 	return fmt.Sprintf("runner.%s.%s.%s.run", r.Runner.User, r.Runner.Name, r.Runner.Version)
 }
-func (r *RunnerRequest) Bytes() []byte {
+func (r *Request) Bytes() []byte {
 	jsonBytes, err := json.Marshal(r)
 	if err != nil {
 		panic(err)

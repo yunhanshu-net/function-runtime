@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"encoding/json"
+	"github.com/nats-io/nats.go"
 	"github.com/yunhanshu-net/runcher/model/request"
 	"github.com/yunhanshu-net/runcher/model/response"
 	"github.com/yunhanshu-net/runcher/runner"
@@ -10,17 +11,18 @@ import (
 
 // Runner runner 运行时
 type Runner struct {
+	Conn      *nats.Conn
 	UUID      string        `json:"uid"`
 	StartTime time.Time     `json:"start_time"`
 	Instance  runner.Runner `json:"instance"`
 	Status    string        `json:"status"`
 }
 
-func (r *Runner) Request(req *request.Context) (*response.RunnerResponse, error) {
-	var res response.RunnerResponse
+func (r *Runner) Request(req *request.Context) (*response.Response, error) {
+	var res response.Response
 	req.Request.UUID = r.UUID
-	subject := req.Request.GetSubject()
-	msg, err := req.Conn.Request(subject, req.Msg.Data, time.Second*20)
+	subject := req.GetSubject()
+	msg, err := r.Conn.Request(subject, req.GetData(), time.Second*20)
 	if err != nil {
 		panic(err)
 	}
