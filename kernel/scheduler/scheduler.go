@@ -8,9 +8,9 @@ import (
 
 type Scheduler struct {
 	conn             *nats.Conn
-	receiveRunnerSub *nats.Subscription
 	upstreamSub      *nats.Subscription
 	manageSub        *nats.Subscription
+	receiveRunnerSub *nats.Subscription
 	runnerLock       map[string]*sync.RWMutex
 	runnerLockLock   *sync.RWMutex
 	lk               *sync.RWMutex
