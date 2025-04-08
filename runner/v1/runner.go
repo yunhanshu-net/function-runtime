@@ -15,6 +15,7 @@ import (
 	"github.com/yunhanshu-net/runcher/model/response"
 	"github.com/yunhanshu-net/runcher/pkg/jsonx"
 	"github.com/yunhanshu-net/runcher/pkg/stringsx"
+	"github.com/yunhanshu-net/runcher/runner/coder"
 	"os"
 	"os/exec"
 	"strconv"
@@ -30,6 +31,8 @@ const (
 )
 
 func NewRunner(runner model.Runner) Runner {
+	runnerCoder, _ := coder.NewCoder(&runner)
+
 	if runner.Kind == "cmd" {
 		return &cmdRunner{
 			qpsWindow:   make(map[int64]uint),
@@ -38,11 +41,14 @@ func NewRunner(runner model.Runner) Runner {
 			detail:      &runner,
 			close:       make(chan *protocol.Message),
 			connectLock: &sync.Mutex{},
+			Coder:       runnerCoder,
 			status:      RunnerStatusClosed,
 			connected:   false,
 		}
 	}
-	return &cmdRunner{qpsWindow: make(map[int64]uint),
+	return &cmdRunner{
+		Coder:       runnerCoder,
+		qpsWindow:   make(map[int64]uint),
 		qpsLock:     &sync.Mutex{},
 		id:          uuid.NewString(),
 		detail:      &runner,
@@ -53,6 +59,7 @@ func NewRunner(runner model.Runner) Runner {
 }
 
 type Runner interface {
+	coder.Coder
 	IsRunning() bool
 	Connect() error
 	Close() error
@@ -66,7 +73,7 @@ type cmdRunner struct {
 	id        string
 	detail    *model.Runner
 	connected bool
-
+	coder.Coder
 	qpsLock        *sync.Mutex
 	qpsWindow      map[int64]uint
 	latestHandelTs time.Time
@@ -114,7 +121,6 @@ func (r *cmdRunner) Connect() error {
 	path := runner.GetRequestPath() + "/" + uuid.New().String() + ".json"
 	err := jsonx.SaveFile(path, req)
 	if err != nil {
-		panic(err)
 		return err
 	}
 
@@ -143,6 +149,7 @@ func (r *cmdRunner) Connect() error {
 			return fmt.Errorf("connect timeout")
 		default:
 
+			//todo 这里有bug，需要改进，下面scanner.Scan()会阻塞，导致上面time.After超时了也不会触发的
 			if scanner.Scan() {
 				line := scanner.Text()
 				// 检测到目标字符串后触发操作

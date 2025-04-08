@@ -12,15 +12,12 @@ import (
 )
 
 const (
-	highQPSThreshold = 3   // 每秒100请求视为高并发
-	bufferSize       = 500 // 高并发缓冲通道大小
-	connTimeout      = 5 * time.Second
+	highQPSThreshold = 3 // 每秒3请求视为高并发
 )
 
 type sockRuntimeInfo struct {
 	qpsWindow      map[int64]uint
 	latestHandelTs time.Time
-	//mu        *sync.Mutex
 }
 
 func (s *sockRuntimeInfo) shouldClose() bool {

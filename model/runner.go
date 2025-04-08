@@ -84,6 +84,7 @@ func (r *Runner) GetInstallPath(rootPath string) string {
 }
 
 type Path struct {
+	RootPath              string //根目录
 	CurrentVersionPath    string //当前版本目录
 	NextVersionPath       string //下一个版本目录
 	CurrentVersionBakPath string //当前版本备份目录
@@ -93,6 +94,7 @@ type Path struct {
 
 func (r *Runner) GetPaths(rootPath string) Path {
 	return Path{
+		RootPath:              rootPath,
 		CurrentVersionPath:    fmt.Sprintf("%s/%s/%s/version/%s", strings.TrimSuffix(rootPath, "/"), r.User, r.Name, r.Version),
 		NextVersionPath:       fmt.Sprintf("%s/%s/%s/version/%s", strings.TrimSuffix(rootPath, "/"), r.User, r.Name, r.GetNextVersion()),
 		CurrentVersionErrPath: fmt.Sprintf("%s/%s/%s/version/%s_err", strings.TrimSuffix(rootPath, "/"), r.User, r.Name, r.Version),

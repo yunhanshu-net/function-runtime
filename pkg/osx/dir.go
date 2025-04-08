@@ -46,9 +46,6 @@ func copyFile(src, dst string) error {
 // srcDir 源目录
 // dstDir 目标目录
 func CopyDirectory(srcDir, dstDir string) error {
-	defer func() {
-		SyncFS()
-	}()
 	err := filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err

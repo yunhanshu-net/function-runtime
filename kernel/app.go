@@ -12,10 +12,10 @@ type Runcher struct {
 }
 
 func NewRuncher() *Runcher {
-	conn := InitNats()
+	//conn := InitNats()
 	return &Runcher{
 		Scheduler: v2.NewScheduler(),
-		Coder:     coder.NewDefaultCoder(conn),
+		//Coder:     coder.NewDefaultCoder(conn),
 	}
 }
 
@@ -24,10 +24,10 @@ func (a *Runcher) Run() error {
 		err := a.Scheduler.Run()
 		logrus.Errorf(err.Error())
 	}()
-	err := a.Coder.Run()
-	if err != nil {
-		return err
-	}
+	//err := a.Coder.Run()
+	//if err != nil {
+	//	return err
+	//}
 
 	return nil
 }
