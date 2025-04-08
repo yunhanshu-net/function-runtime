@@ -42,7 +42,7 @@ func GenMainGo(packages []PackageInfo, filePath string) error {
 	os.RemoveAll(filePath)
 	f, err := os.Create(filePath)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer f.Close()
 
@@ -53,7 +53,7 @@ func GenMainGo(packages []PackageInfo, filePath string) error {
 	}
 
 	if err := tmpl.Execute(f, data); err != nil {
-		panic(err)
+		return err
 	}
 	return nil
 }

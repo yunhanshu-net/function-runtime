@@ -18,85 +18,46 @@ type Golang struct {
 }
 
 func (g *Golang) AddApi(codeApi *codex.CodeApi) error {
-	//nextVersion := runner.GetNextVersion()
-	runnerRoot := g.runnerRoot
+	//runnerRoot := g.runnerRoot
+	//runner := g.runner
+	//pathInfo := runner.GetPaths(runnerRoot)
+	//codeApi.Language = g.runner.Language
+	//
+	//addFileSavePath, addFileAbsFile := codeApi.GetFileSaveFullPath(pathInfo.NextVersionPath)
+	//if osx.DirExists(addFileSavePath) { //先判断package是否存在
+	//	return status.ErrorCodeApiFileExist.WithMessage(addFileSavePath)
+	//}
+	//
+	////先判断是否存在
+	//if osx.FileExists(addFileAbsFile) {
+	//	return status.ErrorCodeApiFileExist.WithMessage(addFileAbsFile)
+	//}
+	////
+	////创建新版本工作目录
+	//err := os.MkdirAll(pathInfo.NextVersionPath, 0755)
+	//if err != nil {
+	//	return err
+	//}
+	//
+	////copy 旧代码到新版本工作目录
+	//err = osx.CopyDirectory(pathInfo.CurrentVersionPath, pathInfo.NextVersionPath) //把当前项目代码保存一份复制到下一个版本
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//err = g.createFile(addFileAbsFile, codeApi.Code)
+	//if err != nil {
+	//	return err
+	//}
 	runner := g.runner
-	//currentVersionWorkPath := runner.GetInstallPath(runnerRoot)
-	pathInfo := runner.GetPaths(runnerRoot)
-	//nextVersionWorkPath, err := runner.GetNextVersionInstallPath(runnerRoot)
-	//if err != nil {
-	//	return err
-	//}
-	codeApi.Language = g.runner.Language
-
-	addFileSavePath, addFileAbsFile := codeApi.GetFileSaveFullPath(pathInfo.NextVersionPath)
-	if osx.DirExists(addFileSavePath) { //先判断package是否存在
-		return status.ErrorCodeApiFileExist.WithMessage(addFileSavePath)
-	}
-
-	//先判断是否存在
-	if osx.FileExists(addFileAbsFile) {
-		return status.ErrorCodeApiFileExist.WithMessage(addFileAbsFile)
-	}
-
-	//假如当前版本是v1，新增一个api，直接编译当前v1目录的main.go文件，
-	//失败了就把当前目录改为v1_err把v1_bak复制一份为v1，回滚为失败前的代码
-	//编译成功后把v1改为v2 把v1_bak改为v1 把当前v2目录copy一份到v2_bak保证每次编译成功后都有源码的备份文件
-	//err := g.createFile(addFileAbsFile, codeApi.Code)
-	//if err != nil {
-	//	return err
-	//}
-	//err = g.buildRunner(pathInfo.CurrentVersionPath, runner.GetBuildPath(runnerRoot), runner.GetBuildRunnerName())
-	//if err != nil {
-	//	//失败了就把当前目录改为v1_err把v1_bak复制一份为v1，回滚为失败前的代码
-	//	err := os.Rename(pathInfo.CurrentVersionPath, pathInfo.CurrentVersionErrPath)
-	//	if err != nil {
-	//		fmt.Printf(" os.Rename(pathInfo.CurrentVersionPath, pathInfo.CurrentVersionErrPath) err:%s:%+v\n", err, pathInfo)
-	//	}
-	//	err = osx.CopyDirectory(pathInfo.CurrentVersionBakPath, pathInfo.CurrentVersionPath) //把v1_bak复制一份为v1，回滚为失败前的代码
-	//	if err != nil {
-	//		return err
-	//	}
-	//
-	//	return err
-	//}
-	//
-	////下面三个操作可以异步后台慢慢执行
-	//err = os.Rename(pathInfo.CurrentVersionPath, pathInfo.NextVersionPath)
-	//if err != nil {
-	//	return err
-	//}
-	//err = os.Rename(pathInfo.CurrentVersionBakPath, pathInfo.CurrentVersionPath)
-	//if err != nil {
-	//	return err
-	//}
-	//err = osx.CopyDirectory(pathInfo.NextVersionPath, pathInfo.NextVersionBakPath)
-	//if err != nil {
-	//	return err
-	//}
-
-	//
-	//创建新版本工作目录
-	err := os.MkdirAll(pathInfo.NextVersionPath, 0755)
+	pathInfo, err := g.addApi(codeApi)
 	if err != nil {
 		return err
 	}
-
-	//copy 旧代码到新版本工作目录
-	err = osx.CopyDirectory(pathInfo.CurrentVersionPath, pathInfo.NextVersionPath) //把当前项目代码保存一份复制到下一个版本
+	err = g.buildRunner(pathInfo.NextVersionPath, runner.GetBuildPath(g.runnerRoot), runner.GetBuildRunnerName())
 	if err != nil {
 		return err
 	}
-
-	err = g.createFile(addFileAbsFile, codeApi.Code)
-	if err != nil {
-		return err
-	}
-	err = g.buildRunner(pathInfo.NextVersionPath, runner.GetBuildPath(runnerRoot), runner.GetBuildRunnerName())
-	if err != nil {
-		return err
-	}
-	//return nil
 	return nil
 }
 
@@ -128,7 +89,7 @@ func (g *Golang) buildRunner(workDir string, buildPath string, runnerName string
 
 	output, err := cmd.Output()
 	if err != nil {
-		return err
+		return fmt.Errorf("build failed: err:%v, output:%s", err, string(output))
 	}
 	fmt.Println(string(output))
 	exists := osx.FileExists(buildPath + "/" + runnerName)
@@ -180,6 +141,7 @@ func (g *Golang) CreateProject() error {
 	//go.mod
 	//main.go
 	//bin
+	//	data
 	//	.request
 	//	user_app_v1
 	//  user_app_v2
@@ -203,6 +165,10 @@ func (g *Golang) CreateProject() error {
 	if err != nil {
 		return err
 	}
+	err = os.MkdirAll(runner.GetToolPath(g.runnerRoot)+"/bin/data", 0755) //初始化数据库目录
+	if err != nil {
+		return err
+	}
 
 	//创建 go.mod 文件
 	err = g.createFile(codePath+"/go.mod", fmt.Sprintf(`
@@ -223,4 +189,75 @@ go 1.23`, runner.User, runner.Name))
 		return err
 	}
 	return nil
+}
+
+func (g *Golang) addApi(api *codex.CodeApi) (*model.Path, error) {
+	runnerRoot := g.runnerRoot
+	runner := g.runner
+	pathInfo := runner.GetPaths(runnerRoot)
+	api.Language = g.runner.Language
+
+	_, addFileAbsFile := api.GetFileSaveFullPath(pathInfo.NextVersionPath)
+	//if osx.DirExists(addFileSavePath) { //先判断package是否存在
+	//	return nil, status.ErrorCodeApiFileExist.WithMessage(addFileSavePath)
+	//}
+
+	//先判断文件是否已经存在
+	if osx.FileExists(addFileAbsFile) {
+		return nil, status.ErrorCodeApiFileExist.WithMessage(addFileAbsFile)
+	}
+
+	exists := osx.DirExists(pathInfo.NextVersionPath)
+	if !exists {
+		//创建新版本工作目录，把当前项目代码复制到下一个版本
+		err := os.MkdirAll(pathInfo.NextVersionPath, 0755)
+		if err != nil {
+			return nil, err
+		}
+		err = osx.CopyDirectory(pathInfo.CurrentVersionPath, pathInfo.NextVersionPath) //把当前项目代码保存一份复制到下一个版本
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err := g.createFile(addFileAbsFile, api.Code) //创建新文件
+	if err != nil {
+		return nil, err
+	}
+
+	return &pathInfo, nil
+}
+
+func (g *Golang) AddApis(codeApis []*codex.CodeApi) (errs []*codex.CodeApiCreateInfo, err error) {
+
+	if len(codeApis) == 0 {
+		return nil, nil
+	}
+	var pathInfo *model.Path
+	for _, codeApi := range codeApis {
+		info, err := g.addApi(codeApi)
+		if err != nil {
+			errs = append(errs, &codex.CodeApiCreateInfo{
+				Language:       codeApi.Language,
+				Package:        codeApi.Package,
+				AbsPackagePath: codeApi.AbsPackagePath,
+				EnName:         codeApi.EnName,
+				CnName:         codeApi.CnName,
+				Msg:            err.Error(),
+				Status:         "failed",
+			})
+		}
+		if info != nil {
+			pathInfo = info
+		}
+	}
+	if pathInfo == nil {
+		return nil, fmt.Errorf("pathInfo is nil")
+	}
+
+	err = g.buildRunner(pathInfo.NextVersionPath, g.runner.GetBuildPath(g.runnerRoot), g.runner.GetBuildRunnerName())
+	if err != nil {
+		return nil, err
+	}
+	return errs, nil
 }

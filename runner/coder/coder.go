@@ -1,7 +1,6 @@
 package coder
 
 import (
-	"fmt"
 	"github.com/yunhanshu-net/runcher/conf"
 	"github.com/yunhanshu-net/runcher/model"
 	"github.com/yunhanshu-net/runcher/pkg/codex"
@@ -10,6 +9,7 @@ import (
 type Coder interface {
 	AddBizPackage(codeBizPackage *codex.BizPackage) error
 	AddApi(codeApi *codex.CodeApi) error
+	AddApis(codeApis []*codex.CodeApi) (errs []*codex.CodeApiCreateInfo, err error)
 	CreateProject() error
 }
 
@@ -18,6 +18,6 @@ func NewCoder(runner *model.Runner) (Coder, error) {
 	case "go":
 		return &Golang{runnerRoot: conf.GetRunnerRoot(), runner: runner}, nil
 	default:
-		return nil, fmt.Errorf("unsupported language: %s", runner.Language)
+		return &Golang{runnerRoot: conf.GetRunnerRoot(), runner: runner}, nil
 	}
 }
