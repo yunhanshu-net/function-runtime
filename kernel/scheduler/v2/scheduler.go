@@ -20,7 +20,6 @@ const (
 type sockRuntimeInfo struct {
 	qpsWindow      map[int64]uint
 	latestHandelTs time.Time
-	//mu        *sync.Mutex
 }
 
 func (s *sockRuntimeInfo) shouldClose() bool {

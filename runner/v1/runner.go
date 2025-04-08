@@ -114,7 +114,6 @@ func (r *cmdRunner) Connect() error {
 	path := runner.GetRequestPath() + "/" + uuid.New().String() + ".json"
 	err := jsonx.SaveFile(path, req)
 	if err != nil {
-		panic(err)
 		return err
 	}
 
@@ -143,6 +142,7 @@ func (r *cmdRunner) Connect() error {
 			return fmt.Errorf("connect timeout")
 		default:
 
+			//todo 这里有bug，需要改进，下面scanner.Scan()会阻塞，导致上面time.After超时了也不会触发的
 			if scanner.Scan() {
 				line := scanner.Text()
 				// 检测到目标字符串后触发操作
