@@ -4,13 +4,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/yunhanshu-net/runcher/api"
 	"github.com/yunhanshu-net/runcher/cmd"
-	"github.com/yunhanshu-net/runcher/test/createtest"
 )
 
 func main() {
 	//conns.Init()
 	cmd.Init()
-	createtest.Create()
+	//createtest.Create()
 
 	v1 := gin.New()
 	v1.Any("api/runner/:user/:runner/*router", api.Http)

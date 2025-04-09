@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"github.com/nats-io/nats.go"
 	"github.com/yunhanshu-net/runcher/model/request/manage"
-	"github.com/yunhanshu-net/runcher/runner"
 )
 
 func (s *Coder) addApi(msg *nats.Msg) error {
@@ -13,8 +12,8 @@ func (s *Coder) addApi(msg *nats.Msg) error {
 	if err != nil {
 		return err
 	}
-	newRunner := runner.NewRunner(req.Runner)
-	err = newRunner.AddApi(req.CodeApi)
+	//newRunner := runner.NewRunner(req.Runner)
+	//err = newRunner.AddApi(req.CodeApi)
 	if err != nil {
 		return err
 	}
