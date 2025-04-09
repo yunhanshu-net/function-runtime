@@ -14,10 +14,7 @@ func (e *Error) WithMessage(msg string) *Error {
 	} else {
 		message = msg
 	}
-	return &Error{
-		Code:    e.Code,
-		Message: message,
-	}
+	return &Error{Code: e.Code, Message: message}
 }
 
 func (e *Error) Error() string {
