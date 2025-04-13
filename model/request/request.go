@@ -6,14 +6,15 @@ import (
 	"github.com/yunhanshu-net/runcher/model"
 )
 
-type RunnerRequest struct {
-	UUID    string              `json:"uuid"`
-	TraceID string              `json:"trace_id"`
-	Route   string              `json:"route"`
-	Method  string              `json:"method"`
-	Headers map[string]string   `json:"headers"`
-	Body    interface{}         `json:"body"` //请求json
-	FileMap map[string][]string `json:"file_map"`
+type Request struct {
+	UUID       string              `json:"uuid"`
+	TraceID    string              `json:"trace_id"`
+	Route      string              `json:"route"`
+	Method     string              `json:"method"`
+	Headers    map[string]string   `json:"headers"`
+	Body       interface{}         `json:"body"`        //请求json
+	BodyString string              `json:"body_string"` //请求json
+	FileMap    map[string][]string `json:"file_map"`
 }
 
 type Ping struct {
@@ -26,14 +27,15 @@ type Runner struct {
 	Version         string `json:"version"`
 	RequestJsonPath string `json:"request_json_path"`
 }
-type Request struct {
+type RunnerRequest struct {
 	UUID            string                 `json:"uuid"`
 	Timeout         int                    `json:"timeout"`
 	Runner          *model.Runner          `json:"runner"`
 	TransportConfig *TransportConfig       `json:"transport_config"`
 	Metadata        map[string]interface{} `json:"metadata"`
-	//RunnerRequest         *Request               `json:"request"`
-	Request *RunnerRequest `json:"request"`
+	//Request         *Request               `json:"request"`
+	Request *Request    `json:"request"`
+	Body    interface{} `json:"body"`
 }
 
 type TransportConfig struct {
@@ -42,10 +44,10 @@ type TransportConfig struct {
 	Metadata map[string]interface{} `json:"metadata"`
 }
 
-func (r *Request) GetSubject() string {
+func (r *RunnerRequest) GetSubject() string {
 	return fmt.Sprintf("runner.%s.%s.%s.run", r.Runner.User, r.Runner.Name, r.Runner.Version)
 }
-func (r *Request) Bytes() []byte {
+func (r *RunnerRequest) Bytes() []byte {
 	jsonBytes, err := json.Marshal(r)
 	if err != nil {
 		panic(err)

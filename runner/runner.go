@@ -1,4 +1,4 @@
-package v1
+package runner
 
 import (
 	"bufio"
@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 	"github.com/smallnest/rpcx/client"
 	"github.com/smallnest/rpcx/protocol"
@@ -25,38 +26,10 @@ import (
 )
 
 const (
-	RunnerStatusConnecting = "connecting"
-	RunnerStatusRunning    = "running"
-	RunnerStatusClosed     = "closed"
+	StatusConnecting = "connecting"
+	StatusRunning    = "running"
+	StatusClosed     = "closed"
 )
-
-func NewRunner(runner model.Runner) Runner {
-	runnerCoder, _ := coder.NewCoder(&runner)
-
-	if runner.Kind == "cmd" {
-		return &cmdRunner{
-			qpsWindow:   make(map[int64]uint),
-			qpsLock:     &sync.Mutex{},
-			id:          uuid.NewString(),
-			detail:      &runner,
-			close:       make(chan *protocol.Message),
-			connectLock: &sync.Mutex{},
-			Coder:       runnerCoder,
-			status:      RunnerStatusClosed,
-			connected:   false,
-		}
-	}
-	return &cmdRunner{
-		Coder:       runnerCoder,
-		qpsWindow:   make(map[int64]uint),
-		qpsLock:     &sync.Mutex{},
-		id:          uuid.NewString(),
-		detail:      &runner,
-		close:       make(chan *protocol.Message),
-		connectLock: &sync.Mutex{},
-		status:      RunnerStatusClosed,
-		connected:   false}
-}
 
 type Runner interface {
 	coder.Coder
@@ -66,7 +39,26 @@ type Runner interface {
 	GetInfo() model.Runner
 	GetID() string
 	GetStatus() string
-	Request(context context.Context, runnerRequest *request.RunnerRequest) (*response.RunnerResponse, error)
+	Request(ctx context.Context, req *request.Request) (*response.RunnerResponse, error)
+}
+
+func NewRunner(runner model.Runner) Runner {
+	runnerCoder, _ := coder.NewCoder(&runner)
+
+	cmd := &cmdRunner{
+		Coder:       runnerCoder,
+		qpsWindow:   make(map[int64]uint),
+		qpsLock:     &sync.Mutex{},
+		id:          uuid.NewString(),
+		detail:      &runner,
+		close:       make(chan *protocol.Message),
+		connectLock: &sync.Mutex{},
+		status:      StatusClosed,
+		connected:   false}
+	if runner.Kind == "cmd" {
+		return cmd
+	}
+	return cmd
 }
 
 type cmdRunner struct {
@@ -78,6 +70,7 @@ type cmdRunner struct {
 	qpsWindow      map[int64]uint
 	latestHandelTs time.Time
 
+	nats        *nats.Conn
 	conn        client.XClient
 	process     *os.Process
 	status      string //
@@ -90,7 +83,7 @@ func (r *cmdRunner) GetStatus() string {
 }
 
 func (r *cmdRunner) IsRunning() bool {
-	return r.status == RunnerStatusRunning
+	return r.status == StatusRunning
 }
 
 func (r *cmdRunner) Connect() error {
@@ -104,12 +97,12 @@ func (r *cmdRunner) Connect() error {
 		return nil
 	}
 
-	r.status = RunnerStatusConnecting
+	r.status = StatusConnecting
 	defer r.connectLock.Unlock()
 	runner := r.detail
 	//path :=runner.GetUnixPath()
 
-	req := request.Request{
+	req := request.RunnerRequest{
 		Runner: runner,
 		UUID:   uuid.NewString(),
 		TransportConfig: &request.TransportConfig{
@@ -168,14 +161,15 @@ func (r *cmdRunner) Connect() error {
 					if err != nil {
 						panic(err)
 					}
-
+					r.status = StatusRunning
+					r.connected = true
 					go func() {
 						ticker := time.NewTicker(time.Second * 20)
 						for {
 							select {
 							case <-r.close:
 								r.connected = false
-								r.status = RunnerStatusClosed
+								r.status = StatusClosed
 								logrus.Infof("服务端已关闭连接，客户端监听到消息已经关闭该连接")
 								r.conn = nil
 								return
@@ -191,12 +185,11 @@ func (r *cmdRunner) Connect() error {
 							}
 						}
 					}()
-					r.status = RunnerStatusRunning
+
 					logrus.Infof("连接启动成功：%s total-cost:%s net:%s",
 						r.detail.GetUnixFileName(),
 						time.Since(now).String(),
 						time.Since(t1).String())
-					r.connected = true
 					// 通知主流程继续
 					//return // 结束监听
 					return nil
@@ -222,7 +215,7 @@ func (r *cmdRunner) GetID() string {
 }
 
 func (r *cmdRunner) closeReq() error {
-	req := &request.Request{Request: nil, Runner: nil}
+	req := &request.RunnerRequest{Request: nil, Runner: nil}
 	resp := &response.RunnerResponse{}
 	err := r.conn.Call(context.Background(), "Close", req, resp)
 	if err != nil {
@@ -235,7 +228,7 @@ func (r *cmdRunner) Close() error {
 		r.connected = false
 		r.connectLock.Lock()
 		defer r.connectLock.Unlock()
-		r.status = RunnerStatusClosed
+		r.status = StatusClosed
 		err := r.closeReq()
 		if err != nil {
 			panic(err)
@@ -246,12 +239,12 @@ func (r *cmdRunner) Close() error {
 	return nil
 }
 
-func (r *cmdRunner) requestByFile(req *request.RunnerRequest) (*response.RunnerResponse, error) {
+func (r *cmdRunner) requestByFile(req *request.Request) (*response.RunnerResponse, error) {
 	fileName := strconv.Itoa(int(time.Now().UnixMicro())) + ".json"
 	//req.Runner.WorkPath = c.GetBinPath() //软件安装目录
 	requestJsonPath := r.detail.GetBinPath() + "/.request/" + fileName
 	binPath := r.detail.GetBinPath()
-	reqCall := request.Request{
+	reqCall := request.RunnerRequest{
 		Request: req,
 		Runner:  r.detail,
 	}
@@ -289,12 +282,12 @@ func (r *cmdRunner) requestByFile(req *request.RunnerRequest) (*response.RunnerR
 	return &res, nil
 }
 
-func (r *cmdRunner) requestByRpc(runnerRequest *request.RunnerRequest) (*response.RunnerResponse, error) {
-	req := &request.Request{Request: runnerRequest, Runner: r.detail}
+func (r *cmdRunner) requestByRpc(runnerRequest *request.Request) (*response.RunnerResponse, error) {
+	req := &request.RunnerRequest{Request: runnerRequest, Runner: r.detail}
 	var resp response.RunnerResponse
 	err := r.conn.Call(context.Background(), "Call", req, &resp)
 	if err != nil {
-		logrus.Error("err", err)
+		logrus.Errorf("requestByRpc err:%s", err)
 		return nil, err
 	}
 	return &resp, nil
@@ -307,7 +300,7 @@ func (r *cmdRunner) shouldBeClose() bool {
 	return false
 }
 
-func (r *cmdRunner) Request(ctx context.Context, runnerRequest *request.RunnerRequest) (*response.RunnerResponse, error) {
+func (r *cmdRunner) Request(ctx context.Context, runnerRequest *request.Request) (*response.RunnerResponse, error) {
 	//这里检查是否需要启动程序
 	r.qpsLock.Lock()
 	r.latestHandelTs = time.Now()

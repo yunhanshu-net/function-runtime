@@ -6,7 +6,7 @@ import (
 	"github.com/yunhanshu-net/runcher/model"
 	"github.com/yunhanshu-net/runcher/model/request"
 	"github.com/yunhanshu-net/runcher/model/response"
-	v1 "github.com/yunhanshu-net/runcher/runner/v1"
+	"github.com/yunhanshu-net/runcher/runner"
 	"sync"
 	"time"
 )
@@ -28,7 +28,7 @@ func (s *sockRuntimeInfo) shouldClose() bool {
 }
 
 type Scheduler struct {
-	runtimeRunner   map[string]v1.Runner
+	runtimeRunner   map[string]runner.Runner
 	runnerLock      *sync.Mutex
 	sockRuntimeInfo map[string]*sockRuntimeInfo
 	sockInfoLk      *sync.Mutex
@@ -47,7 +47,7 @@ func (s *Scheduler) closeRunner(path string) error {
 func NewScheduler() *Scheduler {
 	return &Scheduler{
 		runnerLock:      &sync.Mutex{},
-		runtimeRunner:   make(map[string]v1.Runner),
+		runtimeRunner:   make(map[string]runner.Runner),
 		sockRuntimeInfo: make(map[string]*sockRuntimeInfo),
 		sockInfoLk:      &sync.Mutex{},
 	}
@@ -84,21 +84,21 @@ func (s *Scheduler) Close() error {
 	return nil
 }
 
-func (s *Scheduler) getAndSetRunner(runner *model.Runner) v1.Runner {
+func (s *Scheduler) getAndSetRunner(r *model.Runner) runner.Runner {
 	s.runnerLock.Lock()
 	defer s.runnerLock.Unlock()
-	name := runner.GetUnixFileName()
+	name := r.GetUnixFileName()
 	v, ok := s.runtimeRunner[name]
 	if ok {
 		return v
 	}
 	logrus.Infof("set runner")
-	newRunner := v1.NewRunner(*runner)
+	newRunner := runner.NewRunner(*r)
 	s.runtimeRunner[name] = newRunner
 	return newRunner
 }
 
-func (s *Scheduler) Request(request *request.Request) (*response.RunnerResponse, error) {
+func (s *Scheduler) Request(request *request.RunnerRequest) (*response.RunnerResponse, error) {
 
 	//假如没带版本
 	if request.Runner.Version == "" {
@@ -130,22 +130,22 @@ func (s *Scheduler) Request(request *request.Request) (*response.RunnerResponse,
 	}
 
 	s.sockInfoLk.Unlock()
-	runner := s.getAndSetRunner(request.Runner)
-	if runner.IsRunning() {
-		return runner.Request(context.Background(), request.Request)
+	r := s.getAndSetRunner(request.Runner)
+	if r.IsRunning() {
+		return r.Request(context.Background(), request.Request)
 	}
 
 	logrus.Infof("当前qps：%v", qps)
-	if qps >= highQPSThreshold && runner.GetStatus() != v1.RunnerStatusConnecting { //如果不在启动中，那就启动
+	if qps >= highQPSThreshold && r.GetStatus() != runner.StatusConnecting { //如果不在启动中，那就启动
 		//	启动连接
 		logrus.Infof("当前qps：%v尝试启动连接", qps)
-		err := runner.Connect()
+		err := r.Connect()
 		if err != nil {
-			logrus.Errorf("连接启动失败：%+v err:%s", runner.GetInfo(), err)
+			logrus.Errorf("连接启动失败：%+v err:%s", r.GetInfo(), err)
 			return nil, err
 		}
 	}
-	runnerResponse, err := runner.Request(context.Background(), request.Request)
+	runnerResponse, err := r.Request(context.Background(), request.Request)
 	if err != nil {
 		return nil, err
 	}

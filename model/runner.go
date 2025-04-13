@@ -14,15 +14,6 @@ type Runner struct {
 	Name     string `json:"name"`     //应用名称（英文标识）
 	Version  string `json:"version"`  //应用版本
 	User     string `json:"user"`     //所属租户
-	//WorkPath        string `json:"work_path"`
-	//Command         string `json:"command"`
-	//RequestJsonPath string `json:"request_json_path"`
-
-	//StoreRoot string `json:"store_root"` //oss 存储的跟路径
-
-	//ToolType  string `json:"tool_type"`  //工具类型
-
-	//OssPath   string `json:"oss_path"`   //文件地址
 
 }
 
@@ -83,7 +74,7 @@ func (r *Runner) GetInstallPath(rootPath string) string {
 	return fmt.Sprintf("%s/%s/%s/version/%s", strings.TrimSuffix(rootPath, "/"), r.User, r.Name, r.Version)
 }
 
-type Path struct {
+type RunnerPath struct {
 	RootPath              string //根目录
 	CurrentVersionPath    string //当前版本目录
 	NextVersionPath       string //下一个版本目录
@@ -92,8 +83,8 @@ type Path struct {
 	NextVersionBakPath    string //下一个版本备份目录
 }
 
-func (r *Runner) GetPaths(rootPath string) Path {
-	return Path{
+func (r *Runner) GetPaths(rootPath string) RunnerPath {
+	return RunnerPath{
 		RootPath:              rootPath,
 		CurrentVersionPath:    fmt.Sprintf("%s/%s/%s/version/%s", strings.TrimSuffix(rootPath, "/"), r.User, r.Name, r.Version),
 		NextVersionPath:       fmt.Sprintf("%s/%s/%s/version/%s", strings.TrimSuffix(rootPath, "/"), r.User, r.Name, r.GetNextVersion()),
@@ -114,11 +105,4 @@ func (r *Runner) GetNextVersionInstallPath(rootPath string) (string, error) {
 func (r *Runner) Check() error {
 
 	return nil
-}
-
-type UpdateVersion struct {
-	RunnerConf *Runner `json:"runner_conf"`
-	OldVersion string  `json:"old_version"`
-	//NewVersion        string  `json:"new_version"`
-	//NewVersionOssPath string  `json:"new_version_oss_path"`
 }

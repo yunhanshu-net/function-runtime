@@ -3,13 +3,13 @@ package coder
 import (
 	"github.com/yunhanshu-net/runcher/conf"
 	"github.com/yunhanshu-net/runcher/model"
-	"github.com/yunhanshu-net/runcher/pkg/codex"
+	"github.com/yunhanshu-net/runcher/model/dto/coder"
 )
 
 type Coder interface {
-	AddBizPackage(codeBizPackage *codex.BizPackage) error
-	AddApi(codeApi *codex.CodeApi) error
-	AddApis(codeApis []*codex.CodeApi) (errs []*codex.CodeApiCreateInfo, err error)
+	AddBizPackage(codeBizPackage *coder.BizPackage) error
+	AddApi(codeApi *coder.CodeApi) error
+	AddApis(codeApis []*coder.CodeApi) (errs []*coder.CodeApiCreateInfo, err error)
 	CreateProject() error
 }
 

@@ -1,7 +1,6 @@
 package coder
 
 import (
-	"fmt"
 	"github.com/nats-io/nats.go"
 	"os"
 	"strings"
@@ -35,29 +34,15 @@ func (s *Coder) Run() error {
 }
 
 func (s *Coder) connectManage() error {
-	manageSub, err := s.conn.Subscribe("manage.>", func(msg *nats.Msg) {
-
+	manageSub, err := s.conn.Subscribe("coder.>", func(msg *nats.Msg) {
 		subjects := strings.Split(msg.Subject, ".")
 		subject := subjects[1]
-		var err error
 		if subject == "add_api" {
-			fmt.Println("add_api:", string(msg.Data))
-			err = s.addApi(msg)
-			if err != nil {
-				fmt.Println(err)
-			}
+			s.addApiByNats(msg)
 		}
 
-		newMsg := nats.NewMsg(msg.Subject)
-		if err != nil {
-			newMsg.Header.Set("code", "-1")
-			newMsg.Header.Set("msg", err.Error())
-		} else {
-			newMsg.Header.Set("code", "0")
-		}
-		err = msg.RespondMsg(newMsg)
-		if err != nil {
-			panic(err)
+		if subject == "add_apis" {
+			s.addApiByNats(msg)
 		}
 
 	})

@@ -2,8 +2,9 @@ package coder
 
 import (
 	"fmt"
-	"github.com/yunhanshu-net/runcher/codes"
 	"github.com/yunhanshu-net/runcher/model"
+	"github.com/yunhanshu-net/runcher/model/dto/coder"
+	"github.com/yunhanshu-net/runcher/pkg/codes"
 	"github.com/yunhanshu-net/runcher/pkg/codex"
 	"github.com/yunhanshu-net/runcher/pkg/osx"
 	"github.com/yunhanshu-net/runcher/status"
@@ -17,38 +18,7 @@ type Golang struct {
 	runner     *model.Runner
 }
 
-func (g *Golang) AddApi(codeApi *codex.CodeApi) error {
-	//runnerRoot := g.runnerRoot
-	//runner := g.runner
-	//pathInfo := runner.GetPaths(runnerRoot)
-	//codeApi.Language = g.runner.Language
-	//
-	//addFileSavePath, addFileAbsFile := codeApi.GetFileSaveFullPath(pathInfo.NextVersionPath)
-	//if osx.DirExists(addFileSavePath) { //先判断package是否存在
-	//	return status.ErrorCodeApiFileExist.WithMessage(addFileSavePath)
-	//}
-	//
-	////先判断是否存在
-	//if osx.FileExists(addFileAbsFile) {
-	//	return status.ErrorCodeApiFileExist.WithMessage(addFileAbsFile)
-	//}
-	////
-	////创建新版本工作目录
-	//err := os.MkdirAll(pathInfo.NextVersionPath, 0755)
-	//if err != nil {
-	//	return err
-	//}
-	//
-	////copy 旧代码到新版本工作目录
-	//err = osx.CopyDirectory(pathInfo.CurrentVersionPath, pathInfo.NextVersionPath) //把当前项目代码保存一份复制到下一个版本
-	//if err != nil {
-	//	return err
-	//}
-	//
-	//err = g.createFile(addFileAbsFile, codeApi.Code)
-	//if err != nil {
-	//	return err
-	//}
+func (g *Golang) AddApi(codeApi *coder.CodeApi) error {
 	runner := g.runner
 	pathInfo, err := g.addApi(codeApi)
 	if err != nil {
@@ -99,7 +69,7 @@ func (g *Golang) buildRunner(workDir string, buildPath string, runnerName string
 	return nil
 }
 
-func (g *Golang) AddBizPackage(codeBizPackage *codex.BizPackage) error {
+func (g *Golang) AddBizPackage(codeBizPackage *coder.BizPackage) error {
 	runner := g.runner
 	currentVersionPath := runner.GetInstallPath(g.runnerRoot)
 	_, absPkgPath := codeBizPackage.GetPackageSaveFullPath(currentVersionPath)
@@ -191,7 +161,7 @@ go 1.23`, runner.User, runner.Name))
 	return nil
 }
 
-func (g *Golang) addApi(api *codex.CodeApi) (*model.Path, error) {
+func (g *Golang) addApi(api *coder.CodeApi) (*model.RunnerPath, error) {
 	runnerRoot := g.runnerRoot
 	runner := g.runner
 	pathInfo := runner.GetPaths(runnerRoot)
@@ -228,16 +198,16 @@ func (g *Golang) addApi(api *codex.CodeApi) (*model.Path, error) {
 	return &pathInfo, nil
 }
 
-func (g *Golang) AddApis(codeApis []*codex.CodeApi) (errs []*codex.CodeApiCreateInfo, err error) {
+func (g *Golang) AddApis(codeApis []*coder.CodeApi) (errs []*coder.CodeApiCreateInfo, err error) {
 
 	if len(codeApis) == 0 {
 		return nil, nil
 	}
-	var pathInfo *model.Path
+	var pathInfo *model.RunnerPath
 	for _, codeApi := range codeApis {
 		info, err := g.addApi(codeApi)
 		if err != nil {
-			errs = append(errs, &codex.CodeApiCreateInfo{
+			errs = append(errs, &coder.CodeApiCreateInfo{
 				Language:       codeApi.Language,
 				Package:        codeApi.Package,
 				AbsPackagePath: codeApi.AbsPackagePath,
