@@ -5,10 +5,12 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/yunhanshu-net/runcher/api/v1"
 	"github.com/yunhanshu-net/runcher/cmd"
+	"github.com/yunhanshu-net/runcher/pkg/logger"
 )
 
 func main() {
 	//conns.Init()
+	logger.Setup()
 	cmd.Init()
 	//createtest.Create()
 

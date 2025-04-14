@@ -39,7 +39,7 @@ type Runner interface {
 	GetInfo() model.Runner
 	GetID() string
 	GetStatus() string
-	Request(ctx context.Context, req *request.Request) (*response.RunnerResponse, error)
+	Request(ctx context.Context, req *request.Request) (*response.Response, error)
 }
 
 func NewRunner(runner model.Runner) Runner {
@@ -167,10 +167,10 @@ func (r *cmdRunner) Connect() error {
 						ticker := time.NewTicker(time.Second * 20)
 						for {
 							select {
-							case <-r.close:
+							case v := <-r.close:
 								r.connected = false
 								r.status = StatusClosed
-								logrus.Infof("服务端已关闭连接，客户端监听到消息已经关闭该连接")
+								logrus.Infof("服务端已关闭连接，客户端监听到消息已经关闭该连接 Payload:%s,metadata:%s", string(v.Payload), v.Metadata)
 								r.conn = nil
 								return
 							case <-ticker.C:
@@ -216,7 +216,7 @@ func (r *cmdRunner) GetID() string {
 
 func (r *cmdRunner) closeReq() error {
 	req := &request.RunnerRequest{Request: nil, Runner: nil}
-	resp := &response.RunnerResponse{}
+	resp := &response.Response{}
 	err := r.conn.Call(context.Background(), "Close", req, resp)
 	if err != nil {
 		return err
@@ -239,7 +239,7 @@ func (r *cmdRunner) Close() error {
 	return nil
 }
 
-func (r *cmdRunner) requestByFile(req *request.Request) (*response.RunnerResponse, error) {
+func (r *cmdRunner) requestByFile(req *request.Request) (*response.Response, error) {
 	fileName := strconv.Itoa(int(time.Now().UnixMicro())) + ".json"
 	//req.Runner.WorkPath = c.GetBinPath() //软件安装目录
 	requestJsonPath := r.detail.GetBinPath() + "/.request/" + fileName
@@ -274,7 +274,7 @@ func (r *cmdRunner) requestByFile(req *request.Request) (*response.RunnerRespons
 	if len(resList) == 0 {
 		return nil, fmt.Errorf("soft call err 请使用sdk开发软件")
 	}
-	var res response.RunnerResponse
+	var res response.Response
 	err = json.Unmarshal([]byte(resList[0]), &res)
 	if err != nil {
 		return nil, err
@@ -282,9 +282,9 @@ func (r *cmdRunner) requestByFile(req *request.Request) (*response.RunnerRespons
 	return &res, nil
 }
 
-func (r *cmdRunner) requestByRpc(runnerRequest *request.Request) (*response.RunnerResponse, error) {
+func (r *cmdRunner) requestByRpc(runnerRequest *request.Request) (*response.Response, error) {
 	req := &request.RunnerRequest{Request: runnerRequest, Runner: r.detail}
-	var resp response.RunnerResponse
+	var resp response.Response
 	err := r.conn.Call(context.Background(), "Call", req, &resp)
 	if err != nil {
 		logrus.Errorf("requestByRpc err:%s", err)
@@ -300,7 +300,7 @@ func (r *cmdRunner) shouldBeClose() bool {
 	return false
 }
 
-func (r *cmdRunner) Request(ctx context.Context, runnerRequest *request.Request) (*response.RunnerResponse, error) {
+func (r *cmdRunner) Request(ctx context.Context, runnerRequest *request.Request) (*response.Response, error) {
 	//这里检查是否需要启动程序
 	r.qpsLock.Lock()
 	r.latestHandelTs = time.Now()

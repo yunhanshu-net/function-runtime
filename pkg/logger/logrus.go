@@ -5,11 +5,18 @@ import (
 	"fmt"
 	"github.com/natefinch/lumberjack"
 	"github.com/sirupsen/logrus"
+	"os"
 	"time"
 )
 
 // Option ...
 type Option struct {
+}
+
+var isDev bool
+
+func init() {
+	isDev = os.Getenv("IS_DEV") == "true"
 }
 
 // Setup ...
@@ -21,12 +28,15 @@ func Setup(option ...*Option) {
 		MaxAge:     30,             // 保留旧文件的最大天数
 		Compress:   false,          // 是否压缩旧文件
 	}
-	logrus.SetOutput(mw)
-	logrus.AddHook(&consoleHook{
-		logger: logrus.StandardLogger(),
-	})
+
 	logrus.SetReportCaller(true)
-	logrus.SetFormatter(&logrus.JSONFormatter{TimestampFormat: time.DateTime})
+	if isDev {
+		logrus.SetFormatter(&logrus.TextFormatter{TimestampFormat: time.DateTime})
+		logrus.SetOutput(mw)
+		logrus.AddHook(&consoleHook{logger: logrus.StandardLogger()})
+	} else {
+		logrus.SetFormatter(&logrus.JSONFormatter{TimestampFormat: time.DateTime})
+	}
 }
 
 type consoleHook struct {
@@ -40,6 +50,8 @@ func (h *consoleHook) Fire(entry *logrus.Entry) error {
 	if err != nil {
 		return err
 	}
+	//h.logger.Println(s)
+
 	fmt.Println(s)
 	return nil
 }

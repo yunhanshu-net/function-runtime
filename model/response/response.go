@@ -8,7 +8,7 @@ type Body struct {
 	Data     interface{}            `json:"data"`
 }
 
-type RunnerResponse struct {
+type Response struct {
 	MetaData   map[string]interface{} `json:"meta_data"` //SDK层元数据，例如日志，执行耗时，内存占用等等
 	Headers    map[string]string      `json:"headers"`
 	StatusCode int                    `json:"status_code"` //http对应http code 正常200

@@ -98,7 +98,7 @@ func (s *Scheduler) getAndSetRunner(r *model.Runner) runner.Runner {
 	return newRunner
 }
 
-func (s *Scheduler) Request(request *request.RunnerRequest) (*response.RunnerResponse, error) {
+func (s *Scheduler) Request(request *request.RunnerRequest) (*response.Response, error) {
 
 	//假如没带版本
 	if request.Runner.Version == "" {
@@ -135,10 +135,10 @@ func (s *Scheduler) Request(request *request.RunnerRequest) (*response.RunnerRes
 		return r.Request(context.Background(), request.Request)
 	}
 
-	logrus.Infof("当前qps：%v", qps)
+	//logrus.Infof("当前qps：%v", qps)
 	if qps >= highQPSThreshold && r.GetStatus() != runner.StatusConnecting { //如果不在启动中，那就启动
 		//	启动连接
-		logrus.Infof("当前qps：%v尝试启动连接", qps)
+		//logrus.Infof("当前qps：%v尝试启动连接", qps)
 		err := r.Connect()
 		if err != nil {
 			logrus.Errorf("连接启动失败：%+v err:%s", r.GetInfo(), err)
