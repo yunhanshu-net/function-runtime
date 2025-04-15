@@ -3,7 +3,6 @@ package kernel
 import (
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
-	"github.com/sirupsen/logrus"
 	"github.com/yunhanshu-net/runcher/kernel/coder"
 	"github.com/yunhanshu-net/runcher/kernel/scheduler"
 )
@@ -29,12 +28,14 @@ func MustNewRuncher() *Runcher {
 func (a *Runcher) Run() error {
 	go func() {
 		err := a.Scheduler.Run()
-		logrus.Errorf(err.Error())
+		if err != nil {
+			panic(err)
+		}
 	}()
-	err := a.Coder.Run()
-	if err != nil {
-		return err
-	}
+	//err := a.Coder.Run()
+	//if err != nil {
+	//	return err
+	//}
 
 	//a.natsServer.WaitForShutdown()
 	return nil

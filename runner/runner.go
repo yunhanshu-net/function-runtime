@@ -34,7 +34,7 @@ const (
 type Runner interface {
 	coder.Coder
 	IsRunning() bool
-	Connect() error
+	Connect(conn *nats.Conn) error
 	Close() error
 	GetInfo() model.Runner
 	GetID() string
@@ -70,7 +70,8 @@ type cmdRunner struct {
 	qpsWindow      map[int64]uint
 	latestHandelTs time.Time
 
-	nats        *nats.Conn
+	natsConn *nats.Conn
+	//nats        *nats.Conn
 	conn        client.XClient
 	process     *os.Process
 	status      string //
@@ -86,7 +87,11 @@ func (r *cmdRunner) IsRunning() bool {
 	return r.status == StatusRunning
 }
 
-func (r *cmdRunner) Connect() error {
+func (r *cmdRunner) Connect(conn *nats.Conn) error {
+	return r.connectNats(conn)
+}
+
+func (r *cmdRunner) connectUnixSock() error {
 	lock := r.connectLock.TryLock()
 	if !lock {
 		return nil
@@ -100,13 +105,10 @@ func (r *cmdRunner) Connect() error {
 	r.status = StatusConnecting
 	defer r.connectLock.Unlock()
 	runner := r.detail
-	//path :=runner.GetUnixPath()
 
-	uid := uuid.NewString()
-	r.id = uid
 	req := request.RunnerRequest{
 		Runner: runner,
-		UUID:   uid,
+		UUID:   r.id,
 		TransportConfig: &request.TransportConfig{
 			IdleTime: 10,
 		},
@@ -208,6 +210,79 @@ func (r *cmdRunner) Connect() error {
 	return nil
 }
 
+func (r *cmdRunner) connectNats(conn *nats.Conn) error {
+	now := time.Now()
+	r.natsConn = conn
+	lock := r.connectLock.TryLock()
+	if !lock {
+		return nil
+	}
+	if lock && r.connected {
+		r.connectLock.Unlock()
+		logrus.Infof("未启动连接:%s", r.detail.GetRequestSubject())
+		return nil
+	}
+	connectMsgCh := make(chan *nats.Msg, 1)
+	subscribe, err := conn.ChanSubscribe(r.id, connectMsgCh)
+	if err != nil {
+		panic(err)
+		return err
+	}
+	defer subscribe.Unsubscribe()
+
+	r.status = StatusConnecting
+	defer r.connectLock.Unlock()
+	runner := r.detail
+	//path :=runner.GetUnixPath()
+
+	req := request.RunnerRequest{
+		Runner: runner,
+		UUID:   r.id,
+		TransportConfig: &request.TransportConfig{
+			IdleTime: 10,
+		},
+		Request: nil,
+	}
+	//now := time.Now()
+	path := runner.GetRequestPath() + "/" + uuid.New().String() + ".json"
+	err = jsonx.SaveFile(path, req)
+	if err != nil {
+		panic(err)
+		return err
+	}
+
+	cc := fmt.Sprintf("cd %s && ./%s _connect %s", runner.GetBinPath(), runner.GetBuildRunnerCurrentVersionName(), path)
+	// Linux和macOS可以直接使用 && 连接命令
+	cmd := exec.Command("sh", "-c", cc)
+	err = cmd.Start()
+	if err != nil {
+		logrus.Errorf("cmd run err:%s", err.Error())
+		panic(err)
+		return err
+	}
+	r.process = cmd.Process
+
+	select {
+	case <-time.After(time.Second * 5):
+		panic("time out")
+		return fmt.Errorf("connect %+v timeout", runner)
+	case msg := <-connectMsgCh:
+		newMsg := nats.NewMsg(msg.Subject)
+		newMsg.Header.Set("code", "0")
+		err := msg.RespondMsg(newMsg)
+		if err != nil {
+			panic(err)
+		}
+		if msg.Header.Get("code") != "0" {
+			return fmt.Errorf("connectNats connect %+v err:%s", runner, msg.Header.Get("msg"))
+		}
+		logrus.Infof("runner:%s 启动成功：cost:%s", runner.GetRequestSubject(), time.Now().Sub(now))
+		r.status = StatusRunning
+		r.connected = true
+	}
+	return nil
+}
+
 func (r *cmdRunner) GetInfo() model.Runner {
 	return *r.detail
 }
@@ -224,17 +299,34 @@ func (r *cmdRunner) closeReq() error {
 	}
 	return nil
 }
+
+//func (r *cmdRunner) Close() error {
+//	if r.connected {
+//		r.connected = false
+//		r.connectLock.Lock()
+//		defer r.connectLock.Unlock()
+//		r.status = StatusClosed
+//		err := r.closeReq()
+//		if err != nil {
+//			panic(err)
+//		}
+//		r.conn.Close()
+//		//最好把unix sock文件也删除了
+//	}
+//	return nil
+//}
+
 func (r *cmdRunner) Close() error {
 	if r.connected {
 		r.connected = false
 		r.connectLock.Lock()
 		defer r.connectLock.Unlock()
 		r.status = StatusClosed
-		err := r.closeReq()
-		if err != nil {
-			panic(err)
-		}
-		r.conn.Close()
+		//err := r.closeReq()
+		//if err != nil {
+		//	panic(err)
+		//}
+		//r.conn.Close()
 		//最好把unix sock文件也删除了
 	}
 	return nil
@@ -294,6 +386,31 @@ func (r *cmdRunner) requestByRpc(runnerRequest *request.Request) (*response.Resp
 	return &resp, nil
 }
 
+func (r *cmdRunner) requestByNats(runnerRequest *request.Request) (*response.Response, error) {
+	req := &request.RunnerRequest{Request: runnerRequest, Runner: r.detail}
+	var resp response.Response
+	msg := nats.NewMsg(r.detail.GetRequestSubject())
+	msg.Header.Set("body", runnerRequest.BodyString)
+	marshal, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	msg.Data = marshal
+	respMsg, err := r.natsConn.RequestMsg(msg, time.Second*20)
+	if err != nil {
+		return nil, fmt.Errorf("requestByNats RequestMsg err:%s", err)
+	}
+	if respMsg.Header.Get("code") != "0" {
+		return nil, fmt.Errorf("requestByNats RequestMsg biz err:%s", respMsg.Header.Get("msg"))
+	}
+
+	err = json.Unmarshal(respMsg.Data, &resp)
+	if err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
 func (r *cmdRunner) shouldBeClose() bool {
 	if time.Now().Sub(r.latestHandelTs).Seconds() > 5 {
 		return true
@@ -315,7 +432,7 @@ func (r *cmdRunner) Request(ctx context.Context, runnerRequest *request.Request)
 		return one, nil
 	} else {
 		//长连接
-		rpc, err := r.requestByRpc(runnerRequest)
+		rpc, err := r.requestByNats(runnerRequest)
 		if err != nil {
 			if strings.Contains(err.Error(), "no such file or directory") { //连接失效了
 

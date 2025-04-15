@@ -30,6 +30,7 @@ func InitNats() (*nats.Conn, *server.Server) {
 	}
 
 	// Connect to server
+	//nc, err := nats.Connect(ns.ClientURL())
 	nc, err := nats.Connect(ns.ClientURL())
 
 	if err != nil {

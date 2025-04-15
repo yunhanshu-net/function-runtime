@@ -2,7 +2,6 @@ package scheduler
 
 import (
 	"context"
-	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 	"github.com/yunhanshu-net/runcher/model"
@@ -61,42 +60,48 @@ func NewScheduler(conn *nats.Conn) *Scheduler {
 }
 
 func (s *Scheduler) Run() error {
+	logrus.Infof("Scheduler Run")
 
-	group := uuid.New().String()
+	//group := uuid.New().String()
 	//监听runner的启动和关闭事件
-	subscribe, err := s.natsConn.QueueSubscribe("runner.close.>", group, func(msg *nats.Msg) {
+	subscribe, err := s.natsConn.Subscribe("close.runner", func(msg *nats.Msg) {
+		logrus.Infof("runner.close >%s", msg.Subject)
 		//接收runner关闭
+		var m model.Runner
+		m.Version = msg.Header.Get("version")
+		m.User = msg.Header.Get("user")
+		m.Name = msg.Header.Get("name")
+		err := s.stopRunner(&m)
+		if err != nil {
+			logrus.Errorf("runner:%s close err:%s", m.GetRequestSubject(), err.Error())
+			return
+		}
+		rsp := nats.NewMsg(msg.Subject)
+		rsp.Header.Set("code", "0")
+		err = msg.RespondMsg(rsp)
+		if err != nil {
+			panic(err)
+		}
+		logrus.Infof("runner:%s close success", m.GetRequestSubject())
+
 	})
 	if err != nil {
 		panic(err)
 	}
 	s.closeSub = subscribe
 
-	queueSubscribe, err := s.natsConn.QueueSubscribe("runner.connect.>", group, func(msg *nats.Msg) {
-
-	})
-	if err != nil {
-		panic(err)
-	}
-	s.connectSub = queueSubscribe
-
 	return nil
-	//tk := time.NewTicker(time.Second * 5)
-	//for {
-	//	select {
-	//	case <-tk.C:
-	//		s.sockInfoLk.Lock()
-	//		for path, info := range s.sockRuntimeInfo {
-	//			if info.shouldClose() {
-	//				err := s.closeRunner(path)
-	//				if err != nil {
-	//					logrus.Errorf("close runner:%s err:%s", path, err)
-	//				}
-	//			}
-	//		}
-	//		s.sockInfoLk.Unlock()
-	//	}
-	//}
+}
+
+func (s *Scheduler) stopRunner(runner *model.Runner) error {
+	s.runnerLock.Lock()
+	defer s.runnerLock.Unlock()
+	subject := runner.GetRequestSubject()
+	v, ok := s.runtimeRunner[subject]
+	if ok {
+		return v.Close()
+	}
+	return nil
 }
 
 func (s *Scheduler) Close() error {
@@ -113,7 +118,7 @@ func (s *Scheduler) Close() error {
 func (s *Scheduler) getAndSetRunner(r *model.Runner) runner.Runner {
 	s.runnerLock.Lock()
 	defer s.runnerLock.Unlock()
-	name := r.GetUnixFileName()
+	name := r.GetRequestSubject()
 	v, ok := s.runtimeRunner[name]
 	if ok {
 		return v
@@ -134,15 +139,12 @@ func (s *Scheduler) Request(request *request.RunnerRequest) (*response.Response,
 		}
 		request.Runner.Version = version
 	}
-	sockRunner := request.Runner.GetUnixFileName()
+	sockRunner := request.Runner.GetRequestSubject()
 	s.sockInfoLk.Lock()
 	currentWindow, ok := s.sockRuntimeInfo[sockRunner]
 	ts := time.Now().Unix()
 	if !ok {
-		currentWindow = &sockRuntimeInfo{
-			latestHandelTs: time.Now(),
-			qpsWindow:      map[int64]uint{ts: 1},
-		}
+		currentWindow = &sockRuntimeInfo{latestHandelTs: time.Now(), qpsWindow: map[int64]uint{ts: 1}}
 		s.sockRuntimeInfo[sockRunner] = currentWindow
 	}
 
@@ -164,8 +166,8 @@ func (s *Scheduler) Request(request *request.RunnerRequest) (*response.Response,
 	//logrus.Infof("当前qps：%v", qps)
 	if qps >= highQPSThreshold && r.GetStatus() != runner.StatusConnecting { //如果不在启动中，那就启动
 		//	启动连接
-		//logrus.Infof("当前qps：%v尝试启动连接", qps)
-		err := r.Connect()
+		logrus.Infof("当前qps：%v尝试启动连接", qps)
+		err := r.Connect(s.natsConn)
 		if err != nil {
 			logrus.Errorf("连接启动失败：%+v err:%s", r.GetInfo(), err)
 			return nil, err

@@ -17,6 +17,18 @@ type Runner struct {
 
 }
 
+func (r *Runner) GetRequestSubject() string {
+	builder := strings.Builder{}
+	builder.WriteString("runner.")
+	builder.WriteString(r.User)
+	builder.WriteString(".")
+	builder.WriteString(r.Name)
+	builder.WriteString(".")
+	builder.WriteString(r.Version)
+	builder.WriteString(".run")
+	return builder.String()
+}
+
 func (r *Runner) GetLatestVersion() (string, error) {
 	directories, err := osx.CountDirectories(conf.GetRunnerRoot() + "/" + r.User + "/" + r.Name + "/" + "version")
 	if err != nil {
