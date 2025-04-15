@@ -2,6 +2,8 @@ package scheduler
 
 import (
 	"context"
+	"github.com/google/uuid"
+	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 	"github.com/yunhanshu-net/runcher/model"
 	"github.com/yunhanshu-net/runcher/model/request"
@@ -28,6 +30,10 @@ func (s *sockRuntimeInfo) shouldClose() bool {
 }
 
 type Scheduler struct {
+	natsConn   *nats.Conn
+	closeSub   *nats.Subscription
+	connectSub *nats.Subscription
+	//natsConn *nats.Conn
 	runtimeRunner   map[string]runner.Runner
 	runnerLock      *sync.Mutex
 	sockRuntimeInfo map[string]*sockRuntimeInfo
@@ -44,8 +50,9 @@ func (s *Scheduler) closeRunner(path string) error {
 	return nil
 }
 
-func NewScheduler() *Scheduler {
+func NewScheduler(conn *nats.Conn) *Scheduler {
 	return &Scheduler{
+		natsConn:        conn,
 		runnerLock:      &sync.Mutex{},
 		runtimeRunner:   make(map[string]runner.Runner),
 		sockRuntimeInfo: make(map[string]*sockRuntimeInfo),
@@ -54,6 +61,25 @@ func NewScheduler() *Scheduler {
 }
 
 func (s *Scheduler) Run() error {
+
+	group := uuid.New().String()
+	//监听runner的启动和关闭事件
+	subscribe, err := s.natsConn.QueueSubscribe("runner.close.>", group, func(msg *nats.Msg) {
+		//接收runner关闭
+	})
+	if err != nil {
+		panic(err)
+	}
+	s.closeSub = subscribe
+
+	queueSubscribe, err := s.natsConn.QueueSubscribe("runner.connect.>", group, func(msg *nats.Msg) {
+
+	})
+	if err != nil {
+		panic(err)
+	}
+	s.connectSub = queueSubscribe
+
 	return nil
 	//tk := time.NewTicker(time.Second * 5)
 	//for {

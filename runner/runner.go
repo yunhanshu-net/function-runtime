@@ -102,9 +102,11 @@ func (r *cmdRunner) Connect() error {
 	runner := r.detail
 	//path :=runner.GetUnixPath()
 
+	uid := uuid.NewString()
+	r.id = uid
 	req := request.RunnerRequest{
 		Runner: runner,
-		UUID:   uuid.NewString(),
+		UUID:   uid,
 		TransportConfig: &request.TransportConfig{
 			IdleTime: 10,
 		},
@@ -131,7 +133,6 @@ func (r *cmdRunner) Connect() error {
 		return err
 	}
 	r.process = cmd.Process
-	r.id = uuid.NewString()
 	scanner := bufio.NewScanner(stdoutPipe)
 	// 主进程等待结果或超时
 	for {

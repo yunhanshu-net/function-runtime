@@ -1,22 +1,28 @@
 package kernel
 
 import (
+	"github.com/nats-io/nats-server/v2/server"
+	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 	"github.com/yunhanshu-net/runcher/kernel/coder"
 	"github.com/yunhanshu-net/runcher/kernel/scheduler"
 )
 
 type Runcher struct {
-	Scheduler *scheduler.Scheduler
-	Coder     *coder.Coder
+	Scheduler  *scheduler.Scheduler
+	Coder      *coder.Coder
+	natsServer *server.Server
+	natsConn   *nats.Conn
 }
 
 func MustNewRuncher() *Runcher {
 
-	conn := InitNats()
+	natsCli, natsSrv := InitNats()
 	return &Runcher{
-		Scheduler: scheduler.NewScheduler(),
-		Coder:     coder.NewDefaultCoder(conn),
+		natsServer: natsSrv,
+		natsConn:   natsCli,
+		Scheduler:  scheduler.NewScheduler(natsCli),
+		Coder:      coder.NewDefaultCoder(natsCli),
 	}
 }
 
