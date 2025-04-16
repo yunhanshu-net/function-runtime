@@ -8,6 +8,7 @@ import (
 	"github.com/yunhanshu-net/runcher/model/request"
 	"github.com/yunhanshu-net/runcher/model/response"
 	"github.com/yunhanshu-net/runcher/runner"
+	"github.com/yunhanshu-net/runcher/runtime"
 	"sync"
 	"time"
 )
@@ -29,11 +30,10 @@ func (s *sockRuntimeInfo) shouldClose() bool {
 }
 
 type Scheduler struct {
-	natsConn   *nats.Conn
-	closeSub   *nats.Subscription
-	connectSub *nats.Subscription
-	//natsConn *nats.Conn
-	runtimeRunner   map[string]runner.Runner
+	natsConn *nats.Conn
+	closeSub *nats.Subscription
+	//runtimeRunner   map[string]runner.Runner
+	runtimeRunners  map[string]*runtime.Runners
 	runnerLock      *sync.Mutex
 	sockRuntimeInfo map[string]*sockRuntimeInfo
 	sockInfoLk      *sync.Mutex
@@ -42,18 +42,21 @@ type Scheduler struct {
 func (s *Scheduler) closeRunner(path string) error {
 	s.runnerLock.Lock()
 	defer s.runnerLock.Unlock()
-	v, ok := s.runtimeRunner[path]
+	v, ok := s.runtimeRunners[path]
 	if ok {
-		return v.Close()
+		for _, r := range v.Running {
+			r.Close()
+		}
 	}
 	return nil
 }
 
 func NewScheduler(conn *nats.Conn) *Scheduler {
 	return &Scheduler{
-		natsConn:        conn,
-		runnerLock:      &sync.Mutex{},
-		runtimeRunner:   make(map[string]runner.Runner),
+		natsConn:   conn,
+		runnerLock: &sync.Mutex{},
+		//runtimeRunner:   make(map[string]runner.Runner),
+		runtimeRunners:  make(map[string]*runtime.Runners),
 		sockRuntimeInfo: make(map[string]*sockRuntimeInfo),
 		sockInfoLk:      &sync.Mutex{},
 	}
@@ -65,7 +68,7 @@ func (s *Scheduler) Run() error {
 	//group := uuid.New().String()
 	//监听runner的启动和关闭事件
 	subscribe, err := s.natsConn.Subscribe("close.runner", func(msg *nats.Msg) {
-		logrus.Infof("runner.close >%s", msg.Subject)
+		logrus.Infof("runner.close >%s uid:%s", msg.Subject, string(msg.Data))
 		//接收runner关闭
 		var m model.Runner
 		m.Version = msg.Header.Get("version")
@@ -97,36 +100,72 @@ func (s *Scheduler) stopRunner(runner *model.Runner) error {
 	s.runnerLock.Lock()
 	defer s.runnerLock.Unlock()
 	subject := runner.GetRequestSubject()
-	v, ok := s.runtimeRunner[subject]
+	v, ok := s.runtimeRunners[subject]
 	if ok {
-		return v.Close()
+		for _, r := range v.Running {
+			r.Close()
+		}
 	}
 	return nil
 }
 
 func (s *Scheduler) Close() error {
-	for unix, v := range s.runtimeRunner {
-		err := v.Close()
-		if err != nil {
-			logrus.Errorf("runner:%s close err:%s", unix, err.Error())
+	for unix, v := range s.runtimeRunners {
+
+		for _, r := range v.Running {
+			err := r.Close()
+			if err != nil {
+				logrus.Errorf("runner:%s close err:%s", unix, err.Error())
+			}
+			logrus.Infof("runner:%s close success", unix)
 		}
-		logrus.Infof("runner:%s close success", unix)
 	}
+	s.closeSub.Unsubscribe()
 	return nil
 }
 
-func (s *Scheduler) getAndSetRunner(r *model.Runner) runner.Runner {
+//func (s *Scheduler) getAndSetRunner(r *model.Runner) runner.Runner {
+//	s.runnerLock.Lock()
+//	defer s.runnerLock.Unlock()
+//	name := r.GetRequestSubject()
+//	v, ok := s.runtimeRunner[name]
+//	if ok {
+//		return v
+//	}
+//	logrus.Infof("set runner")
+//	newRunner := runner.NewRunner(*r)
+//	s.runtimeRunner[name] = newRunner
+//	return newRunner
+//}
+
+func (s *Scheduler) addRunningRunner(r runner.Runner) {
+	s.runnerLock.Lock()
+	defer s.runnerLock.Unlock()
+	name := r.GetInfo().GetRequestSubject()
+	v, ok := s.runtimeRunners[name]
+	if !ok {
+		s.runtimeRunners[name] = runtime.NewRunners(r)
+		return
+	}
+	v.Running = append(v.Running, r)
+	return
+}
+
+func (s *Scheduler) getAndSetRunner1(r *model.Runner) *runtime.Runners {
 	s.runnerLock.Lock()
 	defer s.runnerLock.Unlock()
 	name := r.GetRequestSubject()
-	v, ok := s.runtimeRunner[name]
-	if ok {
-		return v
+	runtimeRunner, ok := s.runtimeRunners[name]
+	if !ok {
+		rn := runner.NewRunner(*r)
+		runners := runtime.NewRunners(rn)
+		runners.StartLock[rn.GetID()] = &sync.Mutex{}
+		s.runtimeRunners[name] = runners
+		s.runtimeRunners[name] = runners
+
+		return runners
 	}
-	logrus.Infof("set runner")
-	newRunner := runner.NewRunner(*r)
-	s.runtimeRunner[name] = newRunner
-	return newRunner
+	return runtimeRunner
 }
 
 func (s *Scheduler) Request(request *request.RunnerRequest) (*response.Response, error) {
@@ -139,40 +178,33 @@ func (s *Scheduler) Request(request *request.RunnerRequest) (*response.Response,
 		}
 		request.Runner.Version = version
 	}
-	sockRunner := request.Runner.GetRequestSubject()
-	s.sockInfoLk.Lock()
-	currentWindow, ok := s.sockRuntimeInfo[sockRunner]
-	ts := time.Now().Unix()
-	if !ok {
-		currentWindow = &sockRuntimeInfo{latestHandelTs: time.Now(), qpsWindow: map[int64]uint{ts: 1}}
-		s.sockRuntimeInfo[sockRunner] = currentWindow
-	}
-
-	qps, ok := currentWindow.qpsWindow[ts]
-	if !ok {
-		currentWindow.latestHandelTs = time.Now()
-		currentWindow.qpsWindow[ts] = 1
-	} else {
-		currentWindow.latestHandelTs = time.Now()
-		currentWindow.qpsWindow[ts]++
-	}
-
-	s.sockInfoLk.Unlock()
-	r := s.getAndSetRunner(request.Runner)
-	if r.IsRunning() {
+	rt := s.getAndSetRunner1(request.Runner)
+	r := rt.GetOne()
+	if r != nil && r.IsRunning() { //如果有运行中的实例，直接请求
 		return r.Request(context.Background(), request.Request)
 	}
+	qps := rt.GetCurrentQps()
+	rt.AddQps(1)
 
-	//logrus.Infof("当前qps：%v", qps)
-	if qps >= highQPSThreshold && r.GetStatus() != runner.StatusConnecting { //如果不在启动中，那就启动
+	if qps >= highQPSThreshold && r.GetStatus() == runner.StatusClosed { //如果不在启动中，那就启动
 		//	启动连接
-		logrus.Infof("当前qps：%v尝试启动连接", qps)
-		err := r.Connect(s.natsConn)
-		if err != nil {
-			logrus.Errorf("连接启动失败：%+v err:%s", r.GetInfo(), err)
-			return nil, err
+		lock := rt.StartLock[r.GetID()].TryLock()
+		if lock { //加锁成功！
+			logrus.Infof("当前qps：%v尝试启动连接", qps)
+			err := r.Connect(s.natsConn)
+			if err != nil {
+				logrus.Errorf("连接启动失败：%+v err:%s", r.GetInfo(), err)
+				return nil, err
+			}
+			rt.StartLock[r.GetID()].Unlock()
 		}
 	}
+
+	if rt.GetCurrentQps() >= highQPSThreshold && r.GetStatus() == runner.StatusConnecting { //如果在启动中
+		rt.StartLock[r.GetID()].Lock()
+		rt.StartLock[r.GetID()].Unlock()
+	}
+
 	runnerResponse, err := r.Request(context.Background(), request.Request)
 	if err != nil {
 		return nil, err

@@ -10,7 +10,7 @@ import (
 	"io"
 )
 
-func Http(c *gin.Context) {
+func Runner(c *gin.Context) {
 
 	req := request.RunnerRequest{
 		Request: &request.Request{

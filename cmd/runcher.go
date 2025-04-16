@@ -6,5 +6,5 @@ var Runcher *kernel.Runcher
 
 func Init() {
 	Runcher = kernel.MustNewRuncher()
-	Runcher.Run()
+	//Runcher.Run()
 }

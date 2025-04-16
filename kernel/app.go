@@ -12,12 +12,14 @@ type Runcher struct {
 	Coder      *coder.Coder
 	natsServer *server.Server
 	natsConn   *nats.Conn
+	down       chan struct{}
 }
 
 func MustNewRuncher() *Runcher {
 
 	natsCli, natsSrv := InitNats()
 	return &Runcher{
+		down:       make(chan struct{}, 1),
 		natsServer: natsSrv,
 		natsConn:   natsCli,
 		Scheduler:  scheduler.NewScheduler(natsCli),

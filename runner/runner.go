@@ -36,9 +36,10 @@ type Runner interface {
 	IsRunning() bool
 	Connect(conn *nats.Conn) error
 	Close() error
-	GetInfo() model.Runner
+	GetInfo() *model.Runner
 	GetID() string
 	GetStatus() string
+	WaitReady()
 	Request(ctx context.Context, req *request.Request) (*response.Response, error)
 }
 
@@ -55,6 +56,9 @@ func NewRunner(runner model.Runner) Runner {
 		connectLock: &sync.Mutex{},
 		status:      StatusClosed,
 		connected:   false}
+
+	cmd.cond = &sync.Cond{L: cmd.connectLock}
+
 	if runner.Kind == "cmd" {
 		return cmd
 	}
@@ -76,7 +80,11 @@ type cmdRunner struct {
 	process     *os.Process
 	status      string //
 	connectLock *sync.Mutex
-	close       chan *protocol.Message
+
+	connectingLock *sync.Mutex
+
+	cond  *sync.Cond
+	close chan *protocol.Message
 }
 
 func (r *cmdRunner) GetStatus() string {
@@ -89,6 +97,11 @@ func (r *cmdRunner) IsRunning() bool {
 
 func (r *cmdRunner) Connect(conn *nats.Conn) error {
 	return r.connectNats(conn)
+}
+
+func (r *cmdRunner) WaitReady() {
+	r.connectingLock.Lock()
+	r.connectingLock.Unlock()
 }
 
 func (r *cmdRunner) connectUnixSock() error {
@@ -212,7 +225,7 @@ func (r *cmdRunner) connectUnixSock() error {
 
 func (r *cmdRunner) connectNats(conn *nats.Conn) error {
 	now := time.Now()
-	r.natsConn = conn
+
 	lock := r.connectLock.TryLock()
 	if !lock {
 		return nil
@@ -222,15 +235,21 @@ func (r *cmdRunner) connectNats(conn *nats.Conn) error {
 		logrus.Infof("未启动连接:%s", r.detail.GetRequestSubject())
 		return nil
 	}
+	if r.status == StatusConnecting {
+		return nil
+	}
+
+	r.natsConn = conn
+	r.status = StatusConnecting
 	connectMsgCh := make(chan *nats.Msg, 1)
 	subscribe, err := conn.ChanSubscribe(r.id, connectMsgCh)
 	if err != nil {
+		r.status = StatusClosed
 		panic(err)
 		return err
 	}
 	defer subscribe.Unsubscribe()
 
-	r.status = StatusConnecting
 	defer r.connectLock.Unlock()
 	runner := r.detail
 	//path :=runner.GetUnixPath()
@@ -283,8 +302,8 @@ func (r *cmdRunner) connectNats(conn *nats.Conn) error {
 	return nil
 }
 
-func (r *cmdRunner) GetInfo() model.Runner {
-	return *r.detail
+func (r *cmdRunner) GetInfo() *model.Runner {
+	return r.detail
 }
 func (r *cmdRunner) GetID() string {
 	return r.id
