@@ -13,22 +13,26 @@ import (
 	"strings"
 )
 
+// AddBizPackage(codeBizPackage *coder.BizPackage) (*coder.BizPackageResp, error)
+// AddApi(codeApi *coder.CodeApi) (*coder.AddApiResp,error)
+// AddApis(codeApis []*coder.CodeApi) (resp *coder.AddApisResp, err error)
+// CreateProject() (*coder.CreateProjectResp, error)
 type Golang struct {
 	runnerRoot string
 	runner     *model.Runner
 }
 
-func (g *Golang) AddApi(codeApi *coder.CodeApi) error {
+func (g *Golang) AddApi(codeApi *coder.CodeApi) (*coder.AddApiResp, error) {
 	runner := g.runner
 	pathInfo, err := g.addApi(codeApi)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	err = g.buildRunner(pathInfo.NextVersionPath, runner.GetBuildPath(g.runnerRoot), runner.GetBuildRunnerName())
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return &coder.AddApiResp{Version: runner.GetNextVersion()}, nil
 }
 
 func (g *Golang) createFile(filePath string, content string) error {
@@ -69,23 +73,23 @@ func (g *Golang) buildRunner(workDir string, buildPath string, runnerName string
 	return nil
 }
 
-func (g *Golang) AddBizPackage(codeBizPackage *coder.BizPackage) error {
+func (g *Golang) AddBizPackage(codeBizPackage *coder.BizPackage) (*coder.BizPackageResp, error) {
 	runner := g.runner
 	currentVersionPath := runner.GetInstallPath(g.runnerRoot)
 	_, absPkgPath := codeBizPackage.GetPackageSaveFullPath(currentVersionPath)
 	if osx.DirExists(absPkgPath) { //先判断Package是否存在
-		return status.ErrorCodeApiFileExist.WithMessage(absPkgPath)
+		return nil, status.ErrorCodeApiFileExist.WithMessage(absPkgPath)
 	}
 	//不存在才可以创建
 	err := os.MkdirAll(absPkgPath, 0755)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	//在pkg下创建_init.go文件
 	err = g.createFile(absPkgPath+"/init_.go", fmt.Sprintf(codes.InitCodeTemplate, codeBizPackage.EnName))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	manager := codex.NewGolangProjectManager(currentVersionPath)
 	err = manager.AddPackages([]codex.PackageInfo{
@@ -95,17 +99,17 @@ func (g *Golang) AddBizPackage(codeBizPackage *coder.BizPackage) error {
 		},
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return &coder.BizPackageResp{Version: runner.Version}, nil
 }
 
-func (g *Golang) CreateProject() error {
+func (g *Golang) CreateProject() (*coder.CreateProjectResp, error) {
 	runner := g.runner
 	err := os.MkdirAll(runner.GetToolPath(g.runnerRoot), 0755) //初始化项目目录
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	//go.mod
@@ -124,20 +128,28 @@ func (g *Golang) CreateProject() error {
 	codePath := runner.GetToolPath(g.runnerRoot) + "/version/" + runner.Version
 	err = os.MkdirAll(codePath, 0755) //初始版本目录
 	if err != nil {
-		return err
+		return nil, err
 	}
 	err = os.MkdirAll(codePath+"/api", 0755) //初始api目录
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	err = os.MkdirAll(runner.GetToolPath(g.runnerRoot)+"/bin/.request", 0755) //初始化可执行程序目录
 	if err != nil {
-		return err
+		return nil, err
 	}
 	err = os.MkdirAll(runner.GetToolPath(g.runnerRoot)+"/bin/data", 0755) //初始化数据库目录
 	if err != nil {
-		return err
+		return nil, err
+	}
+	err = os.MkdirAll(runner.GetToolPath(g.runnerRoot)+"/bin/conf", 0755) //初始化配置文件目录
+	if err != nil {
+		return nil, err
+	}
+	err = os.MkdirAll(runner.GetToolPath(g.runnerRoot)+"/bin/logs", 0755) //初始化logs目录
+	if err != nil {
+		return nil, err
 	}
 
 	//创建 go.mod 文件
@@ -146,24 +158,31 @@ module git.yunhanshu.net/%s/%s
 
 go 1.23`, runner.User, runner.Name))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	//创建main文件
 	manager := codex.NewGolangProjectManager(codePath)
 	err = manager.CreateMain(nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	err = g.buildRunner(codePath, runner.GetBuildPath(g.runnerRoot), runner.GetBuildRunnerCurrentVersionName())
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return &coder.CreateProjectResp{Version: runner.Version}, nil
 }
 
 func (g *Golang) addApi(api *coder.CodeApi) (*model.RunnerPath, error) {
 	runnerRoot := g.runnerRoot
 	runner := g.runner
+	if g.runner.Version == "" {
+		version, err := runner.GetLatestVersion()
+		if err != nil {
+			return nil, err
+		}
+		runner.Version = version
+	}
 	pathInfo := runner.GetPaths(runnerRoot)
 	api.Language = g.runner.Language
 
@@ -198,11 +217,13 @@ func (g *Golang) addApi(api *coder.CodeApi) (*model.RunnerPath, error) {
 	return &pathInfo, nil
 }
 
-func (g *Golang) AddApis(codeApis []*coder.CodeApi) (errs []*coder.CodeApiCreateInfo, err error) {
+func (g *Golang) AddApis(codeApis []*coder.CodeApi) (resp *coder.AddApisResp, err error) {
 
+	resp = new(coder.AddApisResp)
 	if len(codeApis) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("no api")
 	}
+	var errs []*coder.CodeApiCreateInfo
 	var pathInfo *model.RunnerPath
 	for _, codeApi := range codeApis {
 		info, err := g.addApi(codeApi)
@@ -224,10 +245,12 @@ func (g *Golang) AddApis(codeApis []*coder.CodeApi) (errs []*coder.CodeApiCreate
 	if pathInfo == nil {
 		return nil, fmt.Errorf("pathInfo is nil")
 	}
+	resp.ErrList = errs
+	resp.Version = g.runner.GetNextVersion()
 
 	err = g.buildRunner(pathInfo.NextVersionPath, g.runner.GetBuildPath(g.runnerRoot), g.runner.GetBuildRunnerName())
 	if err != nil {
 		return nil, err
 	}
-	return errs, nil
+	return resp, nil
 }

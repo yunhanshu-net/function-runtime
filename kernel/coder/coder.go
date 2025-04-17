@@ -18,10 +18,7 @@ func NewDefaultCoder(conn *nats.Conn) *Coder {
 		runnerRoot = strings.TrimSuffix(os.Getenv("RUNNER_ROOT"), "/") + "/soft"
 	}
 
-	return &Coder{
-		conn:       conn,
-		RunnerRoot: runnerRoot,
-	}
+	return &Coder{conn: conn, RunnerRoot: runnerRoot}
 }
 
 func (s *Coder) Run() error {
@@ -51,4 +48,8 @@ func (s *Coder) connectManage() error {
 	}
 	s.manageSub = manageSub
 	return nil
+}
+
+func (s *Coder) Close() error {
+	return s.manageSub.Unsubscribe()
 }

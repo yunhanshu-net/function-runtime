@@ -13,6 +13,7 @@ func main() {
 	logger.Setup()
 	cmd.Init()
 	cmd.Runcher.Run()
+	defer cmd.Runcher.Close()
 
 	app := gin.New()
 	router.InitRouter(app)

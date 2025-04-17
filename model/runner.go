@@ -30,9 +30,16 @@ func (r *Runner) GetRequestSubject() string {
 }
 
 func (r *Runner) GetLatestVersion() (string, error) {
-	directories, err := osx.CountDirectories(conf.GetRunnerRoot() + "/" + r.User + "/" + r.Name + "/" + "version")
+	path := conf.GetRunnerRoot() + "/" + r.User + "/" + r.Name + "/" + "version"
+	if !osx.DirExists(path) {
+		return "v0", nil
+	}
+	directories, err := osx.CountDirectories(path)
 	if err != nil {
 		return "", err
+	}
+	if directories == 0 {
+		return "v0", nil
 	}
 	return fmt.Sprintf("v%v", directories-1), nil
 }

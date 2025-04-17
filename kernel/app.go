@@ -34,11 +34,16 @@ func (a *Runcher) Run() error {
 			panic(err)
 		}
 	}()
-	//err := a.Coder.Run()
-	//if err != nil {
-	//	return err
-	//}
+	err := a.Coder.Run()
+	if err != nil {
+		return err
+	}
 
-	//a.natsServer.WaitForShutdown()
+	return nil
+}
+
+func (a *Runcher) Close() error {
+	a.Coder.Close()
+	a.Scheduler.Close()
 	return nil
 }
