@@ -1,7 +1,6 @@
 package v1
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/yunhanshu-net/runcher/cmd"
@@ -28,17 +27,19 @@ func Runner(c *gin.Context) {
 	}
 
 	if c.Request.Method == "POST" {
-		var r interface{}
+		//var r interface{}
 		b, err := io.ReadAll(c.Request.Body)
 		if err != nil {
 			panic(err)
 		}
+		defer c.Request.Body.Close()
 
-		err = json.Unmarshal(b, &req.Request.Body)
-		if err != nil {
-			panic(err)
-		}
-		req.Request.Body = r
+		//err = json.Unmarshal(b, &req.Request.Body)
+		//if err != nil {
+		//	panic(err)
+		//}
+		fmt.Println(string(b))
+		req.Request.Body = string(b)
 		req.Request.BodyString = string(b)
 	}
 

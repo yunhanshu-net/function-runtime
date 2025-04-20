@@ -369,6 +369,7 @@ func (r *cmdRunner) requestByFile(req *request.Request) (*response.Response, err
 		binPath, r.detail.GetBuildRunnerCurrentVersionName(), req.Route, fileName)
 	// Linux和macOS可以直接使用 && 连接命令
 	cmd := exec.Command("sh", "-c", cc)
+	fmt.Println(cc)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	err = cmd.Run()
