@@ -13,10 +13,6 @@ import (
 	"strings"
 )
 
-// AddBizPackage(codeBizPackage *coder.BizPackage) (*coder.BizPackageResp, error)
-// AddApi(codeApi *coder.CodeApi) (*coder.AddApiResp,error)
-// AddApis(codeApis []*coder.CodeApi) (resp *coder.AddApisResp, err error)
-// CreateProject() (*coder.CreateProjectResp, error)
 type Golang struct {
 	runnerRoot string
 	runner     *model.Runner

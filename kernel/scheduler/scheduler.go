@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 	"github.com/yunhanshu-net/runcher/model"
@@ -180,7 +181,10 @@ func (s *Scheduler) Request(request *request.RunnerRequest) (*response.Response,
 	}
 	rt := s.getAndSetRunner1(request.Runner)
 	r := rt.GetOne()
-	if r != nil && r.IsRunning() { //如果有运行中的实例，直接请求
+	if r == nil {
+		return nil, errors.New("runner not found")
+	}
+	if r.IsRunning() { //如果有运行中的实例，直接请求
 		return r.Request(context.Background(), request.Request)
 	}
 	qps := rt.GetCurrentQps()
