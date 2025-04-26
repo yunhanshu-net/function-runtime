@@ -11,33 +11,18 @@ import (
 	"github.com/yunhanshu-net/runcher/runner"
 	"github.com/yunhanshu-net/runcher/runtime"
 	"sync"
-	"time"
 )
 
 const (
 	highQPSThreshold = 3 // 每秒3请求视为高并发
 )
 
-type sockRuntimeInfo struct {
-	qpsWindow      map[int64]uint
-	latestHandelTs time.Time
-}
-
-func (s *sockRuntimeInfo) shouldClose() bool {
-	if time.Now().Sub(s.latestHandelTs).Seconds() > 5 {
-		return true
-	}
-	return false
-}
-
 type Scheduler struct {
-	natsConn *nats.Conn
-	closeSub *nats.Subscription
-	//runtimeRunner   map[string]runner.Runner
-	runtimeRunners  map[string]*runtime.Runners
-	runnerLock      *sync.Mutex
-	sockRuntimeInfo map[string]*sockRuntimeInfo
-	sockInfoLk      *sync.Mutex
+	natsConn       *nats.Conn
+	closeSub       *nats.Subscription
+	runtimeRunners map[string]*runtime.Runners
+	runnerLock     *sync.Mutex
+	sockInfoLk     *sync.Mutex
 }
 
 func (s *Scheduler) closeRunner(path string) error {
@@ -54,12 +39,10 @@ func (s *Scheduler) closeRunner(path string) error {
 
 func NewScheduler(conn *nats.Conn) *Scheduler {
 	return &Scheduler{
-		natsConn:   conn,
-		runnerLock: &sync.Mutex{},
-		//runtimeRunner:   make(map[string]runner.Runner),
-		runtimeRunners:  make(map[string]*runtime.Runners),
-		sockRuntimeInfo: make(map[string]*sockRuntimeInfo),
-		sockInfoLk:      &sync.Mutex{},
+		natsConn:       conn,
+		runnerLock:     &sync.Mutex{},
+		runtimeRunners: make(map[string]*runtime.Runners),
+		sockInfoLk:     &sync.Mutex{},
 	}
 }
 
@@ -84,13 +67,14 @@ func (s *Scheduler) Run() error {
 		rsp.Header.Set("code", "0")
 		err = msg.RespondMsg(rsp)
 		if err != nil {
-			panic(err)
+			logrus.Errorf("runner:%s close err:%s", m.GetRequestSubject(), err.Error())
+			return
 		}
 		logrus.Infof("runner:%s close success", m.GetRequestSubject())
 
 	})
 	if err != nil {
-		panic(err)
+		return err
 	}
 	s.closeSub = subscribe
 
@@ -125,34 +109,7 @@ func (s *Scheduler) Close() error {
 	return nil
 }
 
-//func (s *Scheduler) getAndSetRunner(r *model.Runner) runner.Runner {
-//	s.runnerLock.Lock()
-//	defer s.runnerLock.Unlock()
-//	name := r.GetRequestSubject()
-//	v, ok := s.runtimeRunner[name]
-//	if ok {
-//		return v
-//	}
-//	logrus.Infof("set runner")
-//	newRunner := runner.NewRunner(*r)
-//	s.runtimeRunner[name] = newRunner
-//	return newRunner
-//}
-
-func (s *Scheduler) addRunningRunner(r runner.Runner) {
-	s.runnerLock.Lock()
-	defer s.runnerLock.Unlock()
-	name := r.GetInfo().GetRequestSubject()
-	v, ok := s.runtimeRunners[name]
-	if !ok {
-		s.runtimeRunners[name] = runtime.NewRunners(r)
-		return
-	}
-	v.Running = append(v.Running, r)
-	return
-}
-
-func (s *Scheduler) getAndSetRunner1(r *model.Runner) *runtime.Runners {
+func (s *Scheduler) getAndSetRunner(r *model.Runner) *runtime.Runners {
 	s.runnerLock.Lock()
 	defer s.runnerLock.Unlock()
 	name := r.GetRequestSubject()
@@ -179,7 +136,7 @@ func (s *Scheduler) Request(request *request.RunnerRequest) (*response.Response,
 		}
 		request.Runner.Version = version
 	}
-	rt := s.getAndSetRunner1(request.Runner)
+	rt := s.getAndSetRunner(request.Runner)
 	r := rt.GetOne()
 	if r == nil {
 		return nil, errors.New("runner not found")

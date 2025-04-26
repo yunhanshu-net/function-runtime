@@ -8,6 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/yunhanshu-net/runcher/kernel/coder"
 	"github.com/yunhanshu-net/runcher/kernel/scheduler"
+	"github.com/yunhanshu-net/runcher/pkg/natsx"
 	"sync"
 	"time"
 )
@@ -27,7 +28,7 @@ type Runcher struct {
 // MustNewRuncher 创建一个新的Runcher实例
 // 如果初始化过程中出现任何错误，将会panic
 func MustNewRuncher() *Runcher {
-	natsCli, natsSrv, err := InitNatsWithRetry(3)
+	natsCli, natsSrv, err := natsx.InitNatsWithRetry(3)
 	if err != nil {
 		panic(fmt.Sprintf("初始化NATS失败: %v", err))
 	}
@@ -43,25 +44,6 @@ func MustNewRuncher() *Runcher {
 		ctx:        ctx,
 		cancel:     cancel,
 	}
-}
-
-// InitNatsWithRetry 初始化NATS服务，支持重试
-func InitNatsWithRetry(maxRetries int) (*nats.Conn, *server.Server, error) {
-	var lastErr error
-
-	for i := 0; i < maxRetries; i++ {
-		natsCli, natsSrv, err := InitNats()
-		if err == nil {
-			// 连接成功
-			return natsCli, natsSrv, nil
-		}
-
-		lastErr = err
-		logrus.Warnf("NATS初始化失败(尝试 %d/%d): %v, 等待重试...", i+1, maxRetries, err)
-		time.Sleep(time.Second * 2)
-	}
-
-	return nil, nil, fmt.Errorf("在%d次尝试后NATS初始化失败: %w", maxRetries, lastErr)
 }
 
 // Run 启动Runcher
