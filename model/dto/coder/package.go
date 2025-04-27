@@ -2,6 +2,7 @@ package coder
 
 import (
 	"github.com/yunhanshu-net/runcher/model"
+	"github.com/yunhanshu-net/runcher/model/dto/syscallback"
 	"strings"
 )
 
@@ -33,12 +34,15 @@ type CreateProjectResp struct {
 }
 
 type AddApisResp struct {
-	Version string               `json:"version"`
-	ErrList []*CodeApiCreateInfo `json:"err_list"`
+	Version              string               `json:"version"`
+	ErrList              []*CodeApiCreateInfo `json:"err_list"`
+	SyscallChangeVersion *syscallback.SysOnVersionChangeResp
 }
 
 type AddApiResp struct {
-	Version string `json:"version"`
+	Version              string      `json:"version"`
+	Data                 interface{} `json:"data"`
+	SyscallChangeVersion *syscallback.SysOnVersionChangeResp
 }
 
 type BizPackageResp struct {

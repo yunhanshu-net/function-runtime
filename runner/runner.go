@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/yunhanshu-net/runcher/model/dto/syscallback"
 	"os"
 	"os/exec"
 	"strconv"
@@ -279,4 +280,24 @@ func (r *cmdRunner) Request(ctx context.Context, runnerRequest *request.Request)
 		}
 		return rpc, nil
 	}
+}
+
+func SysCallback[REQ, RESP any](r Runner, req *syscallback.Request[REQ]) (*syscallback.Response[RESP], error) {
+	//request.
+	runnerRequest := &request.Request{
+		Route:  "_sysCallback",
+		Method: "POST",
+		UUID:   r.GetID(),
+		Body:   req,
+	}
+	resp, err := r.Request(context.Background(), runnerRequest)
+	if err != nil {
+		return nil, err
+	}
+	body, err := response.DecodeBody[RESP](resp)
+	if err != nil {
+		return nil, err
+	}
+	return &syscallback.Response[RESP]{Data: body.Data}, nil
+
 }

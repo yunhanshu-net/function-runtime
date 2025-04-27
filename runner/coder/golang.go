@@ -111,6 +111,7 @@ func (g *Golang) CreateProject() (*coder.CreateProjectResp, error) {
 	//go.mod
 	//main.go
 	//bin
+	//	api-logs //存储每个版本的api配置
 	//	data
 	//	.request
 	//	user_app_v1
@@ -144,6 +145,10 @@ func (g *Golang) CreateProject() (*coder.CreateProjectResp, error) {
 		return nil, err
 	}
 	err = os.MkdirAll(runner.GetToolPath(g.runnerRoot)+"/bin/logs", 0755) //初始化logs目录
+	if err != nil {
+		return nil, err
+	}
+	err = os.MkdirAll(runner.GetToolPath(g.runnerRoot)+"/bin/api-logs", 0755) //初始化api-logs目录
 	if err != nil {
 		return nil, err
 	}

@@ -1,11 +1,14 @@
 package response
 
-type Body struct {
+import "encoding/json"
+
+type Body[T any] struct {
+	DataType string                 `json:"data_type"`
 	TraceID  string                 `json:"trace_id"`
 	MetaData map[string]interface{} `json:"meta_data"` //sdk 层
 	Code     int                    `json:"code"`
 	Msg      string                 `json:"msg"`
-	Data     interface{}            `json:"data"`
+	Data     T                      `json:"data"`
 }
 
 type Response struct {
@@ -16,4 +19,25 @@ type Response struct {
 	DataType   string                 `json:"data_type"`
 	Body       interface{}            `json:"body"`
 	Multiple   bool                   `json:"multiple"`
+}
+
+func DecodeBody[T any](r *Response) (*Body[T], error) {
+	var bd Body[T]
+	switch r.Body.(type) {
+	case string:
+		err := json.Unmarshal([]byte(r.Body.(string)), &bd)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		marshal, err := json.Marshal(r.Body)
+		if err != nil {
+			return nil, err
+		}
+		err = json.Unmarshal(marshal, &bd)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &bd, nil
 }

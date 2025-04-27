@@ -3,14 +3,17 @@ package coder
 import (
 	"encoding/json"
 	"github.com/nats-io/nats.go"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/yunhanshu-net/runcher/model/dto/coder"
+	"github.com/yunhanshu-net/runcher/model/dto/syscallback"
 	"github.com/yunhanshu-net/runcher/runner"
 )
 
 func (s *Coder) addApiByNats(msg *nats.Msg) {
 	var req coder.AddApiReq
 	var resp = new(coder.AddApiResp)
+	var callbackResp = new(syscallback.Response[*syscallback.SysOnVersionChangeResp])
 	var err error
 	defer func() {
 		rspMsg := nats.NewMsg(msg.Subject)
@@ -20,6 +23,7 @@ func (s *Coder) addApiByNats(msg *nats.Msg) {
 		} else {
 			rspMsg.Header.Set("code", "0")
 		}
+		resp.SyscallChangeVersion = callbackResp.Data
 		marshal, _ := json.Marshal(resp)
 		rspMsg.Data = marshal
 		err2 := msg.RespondMsg(rspMsg)
@@ -36,13 +40,24 @@ func (s *Coder) addApiByNats(msg *nats.Msg) {
 
 	resp, err = newRunner.AddApi(req.CodeApi)
 	if err != nil {
+		err = errors.WithMessage(err, "AddApi err")
 		return
 	}
+
+	var callReq syscallback.Request[*syscallback.SysOnVersionChangeReq]
+	callbackResp, err = runner.SysCallback[*syscallback.SysOnVersionChangeReq, *syscallback.SysOnVersionChangeResp](newRunner, &callReq)
+	if err != nil {
+		err = errors.WithMessage(err, "SysCallback err")
+		return
+	}
+
 }
 
 func (s *Coder) addApisByNats(msg *nats.Msg) {
 	var req coder.AddApisReq
 	var resp = new(coder.AddApisResp)
+	var callbackResp = new(syscallback.Response[*syscallback.SysOnVersionChangeResp])
+
 	var err error
 	//var errs []*coder.CodeApiCreateInfo
 	defer func() {
@@ -53,6 +68,7 @@ func (s *Coder) addApisByNats(msg *nats.Msg) {
 		} else {
 			rspMsg.Header.Set("code", "0")
 		}
+		resp.SyscallChangeVersion = callbackResp.Data
 		marshal, _ := json.Marshal(resp)
 		rspMsg.Data = marshal
 		err2 := msg.RespondMsg(rspMsg)
@@ -67,6 +83,13 @@ func (s *Coder) addApisByNats(msg *nats.Msg) {
 	newRunner := runner.NewRunner(*req.Runner)
 	resp, err = newRunner.AddApis(req.CodeApis)
 	if err != nil {
+		return
+	}
+
+	var callReq syscallback.Request[*syscallback.SysOnVersionChangeReq]
+	callbackResp, err = runner.SysCallback[*syscallback.SysOnVersionChangeReq, *syscallback.SysOnVersionChangeResp](newRunner, &callReq)
+	if err != nil {
+		err = errors.WithMessage(err, "SysCallback err")
 		return
 	}
 }
