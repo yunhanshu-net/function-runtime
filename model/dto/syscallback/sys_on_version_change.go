@@ -1,6 +1,6 @@
 package syscallback
 
-import "github.com/yunhanshu-net/sdk-go/model/dto/api"
+import "github.com/yunhanshu-net/runcher/model/dto/api"
 
 type SysOnVersionChangeReq struct {
 	OldVersion string `json:"old_version"`
