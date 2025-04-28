@@ -6,7 +6,6 @@ import (
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
-	"github.com/yunhanshu-net/runcher/kernel/coder"
 	"github.com/yunhanshu-net/runcher/kernel/scheduler"
 	"github.com/yunhanshu-net/runcher/pkg/natsx"
 	"sync"
@@ -15,14 +14,16 @@ import (
 
 // Runcher 是核心运行器，管理调度器和编码器
 type Runcher struct {
-	Scheduler  *scheduler.Scheduler
-	Coder      *coder.Coder
+	Scheduler *scheduler.Scheduler
+	//Coder      *coder.Coder
 	natsServer *server.Server
 	natsConn   *nats.Conn
 	down       chan struct{}
 	wg         sync.WaitGroup
 	ctx        context.Context
 	cancel     context.CancelFunc
+
+	manageSub *nats.Subscription
 }
 
 // MustNewRuncher 创建一个新的Runcher实例
@@ -40,9 +41,9 @@ func MustNewRuncher() *Runcher {
 		natsServer: natsSrv,
 		natsConn:   natsCli,
 		Scheduler:  scheduler.NewScheduler(natsCli),
-		Coder:      coder.NewDefaultCoder(natsCli),
-		ctx:        ctx,
-		cancel:     cancel,
+		//Coder:      coder.NewDefaultCoder(natsCli),
+		ctx:    ctx,
+		cancel: cancel,
 	}
 }
 
@@ -61,16 +62,16 @@ func (a *Runcher) Run() error {
 		}
 	}()
 
-	// 启动编码器
-	a.wg.Add(1)
-	go func() {
-		defer a.wg.Done()
-		err := a.Coder.Run()
-		if err != nil {
-			logrus.Errorf("编码器运行错误: %v", err)
-			a.cancel() // 出错时取消所有组件
-		}
-	}()
+	//// 启动编码器
+	//a.wg.Add(1)
+	//go func() {
+	//	defer a.wg.Done()
+	//	err := a.Coder.Run()
+	//	if err != nil {
+	//		logrus.Errorf("编码器运行错误: %v", err)
+	//		a.cancel() // 出错时取消所有组件
+	//	}
+	//}()
 
 	// 监控上下文取消
 	go func() {
@@ -110,10 +111,10 @@ func (a *Runcher) Close() error {
 
 	// 关闭组件
 	var errs []error
-
-	if err := a.Coder.Close(); err != nil {
-		errs = append(errs, fmt.Errorf("关闭编码器错误: %w", err))
-	}
+	//
+	//if err := a.Coder.Close(); err != nil {
+	//	errs = append(errs, fmt.Errorf("关闭编码器错误: %w", err))
+	//}
 
 	if err := a.Scheduler.Close(); err != nil {
 		errs = append(errs, fmt.Errorf("关闭调度器错误: %w", err))

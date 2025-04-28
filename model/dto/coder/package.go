@@ -40,9 +40,9 @@ type AddApisResp struct {
 }
 
 type AddApiResp struct {
-	Version              string      `json:"version"`
-	Data                 interface{} `json:"data"`
-	SyscallChangeVersion *syscallback.SysOnVersionChangeResp
+	Version              string                              `json:"version"`
+	Data                 interface{}                         `json:"data"`
+	SyscallChangeVersion *syscallback.SysOnVersionChangeResp `json:"syscall_change_version"`
 }
 
 type BizPackageResp struct {
