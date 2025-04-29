@@ -19,13 +19,29 @@ func (s *Scheduler) addApiByNats(req *coder.AddApiReq) (*coder.AddApiResp, error
 		err = errors.WithMessage(err, "AddApi err")
 		return nil, err
 	}
-	callback, err := s.SysCallback("SysOnVersionChange", req.Runner, map[string]interface{}{"version": ""})
+	callback, err := s.SysCallback("SysOnVersionChange", req.Runner, &syscallback.SysOnVersionChangeReq{})
 	if err != nil {
 		return nil, err
 	}
 	resp.SyscallChangeVersion = callback.(*syscallback.SysOnVersionChangeResp)
 	return resp, nil
+}
 
+func (s *Scheduler) addApisByNats(req *coder.AddApisReq) (*coder.AddApisResp, error) {
+	var resp = new(coder.AddApisResp)
+	newRunner := runner.NewRunner(*req.Runner)
+
+	resp, err := newRunner.AddApis(req.CodeApis)
+	if err != nil {
+		err = errors.WithMessage(err, "addApisByNats err")
+		return nil, err
+	}
+	callback, err := s.SysCallback("SysOnVersionChange", req.Runner, &syscallback.SysOnVersionChangeReq{})
+	if err != nil {
+		return nil, err
+	}
+	resp.SyscallChangeVersion = callback.(*syscallback.SysOnVersionChangeResp)
+	return resp, nil
 }
 
 func (s *Scheduler) AddApiByNats(msg *nats.Msg) {
@@ -87,16 +103,8 @@ func (s *Scheduler) AddApisByNats(msg *nats.Msg) {
 	if err != nil {
 		return
 	}
-	newRunner := runner.NewRunner(*req.Runner)
-	resp, err = newRunner.AddApis(req.CodeApis)
+	resp, err = s.addApisByNats(&req)
 	if err != nil {
-		return
-	}
-
-	//var callReq syscallback.Request
-	//callbackResp, err = runner.SysCallback[*syscallback.SysOnVersionChangeReq, *syscallback.SysOnVersionChangeResp](newRunner, &callReq)
-	if err != nil {
-		err = errors.WithMessage(err, "SysCallback err")
 		return
 	}
 }

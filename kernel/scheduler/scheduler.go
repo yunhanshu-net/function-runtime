@@ -3,12 +3,10 @@ package scheduler
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 	"github.com/yunhanshu-net/runcher/conf"
 	"github.com/yunhanshu-net/runcher/model"
-	"github.com/yunhanshu-net/runcher/model/dto/syscallback"
 	"github.com/yunhanshu-net/runcher/model/request"
 	"github.com/yunhanshu-net/runcher/model/response"
 	"github.com/yunhanshu-net/runcher/runner"
@@ -199,35 +197,4 @@ func (s *Scheduler) Request(request *request.RunnerRequest) (*response.Response,
 		return nil, err
 	}
 	return runnerResponse, nil
-}
-
-func (s *Scheduler) SysCallback(callbackType string, r *model.Runner, body interface{}) (interface{}, error) {
-
-	runnerRequest := &request.Request{
-		Route:  "_sysCallback",
-		Method: "POST",
-		Body: &syscallback.Request{
-			CallbackType: callbackType,
-			Data:         body,
-		},
-	}
-	runnerIns := s.getRunner(r)
-	rsp, err := runnerIns.Request(context.Background(), runnerRequest)
-	if err != nil {
-		return nil, err
-	}
-	switch callbackType {
-	case "SysOnVersionChange":
-		decodeBody, err := response.DecodeBody[*syscallback.ResponseWith[*syscallback.SysOnVersionChangeResp]](rsp)
-		if err != nil {
-			return nil, err
-		}
-		if decodeBody.Code != 0 {
-			return nil, fmt.Errorf(decodeBody.Msg)
-		}
-		//*syscallback.SysOnVersionChangeResp
-		return decodeBody.Data, nil
-	}
-
-	return nil, fmt.Errorf("callbackType not found")
 }

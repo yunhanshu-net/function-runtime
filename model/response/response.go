@@ -1,6 +1,9 @@
 package response
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"net/http"
+)
 
 type Body struct {
 	DataType string                 `json:"data_type"`
@@ -34,6 +37,20 @@ type Response struct {
 	Multiple   bool                   `json:"multiple"`
 }
 
+func (r *Response) OK() bool {
+	return r.StatusCode == http.StatusOK
+}
+
+type With[T any] struct {
+	MetaData   map[string]interface{} `json:"meta_data"` //SDK层元数据，例如日志，执行耗时，内存占用等等
+	Headers    map[string]string      `json:"headers"`
+	StatusCode int                    `json:"status_code"` //http对应http code 正常200
+	Msg        string                 `json:"msg"`
+	DataType   string                 `json:"data_type"`
+	Body       T                      `json:"body"`
+	Multiple   bool                   `json:"multiple"`
+}
+
 func (r *Response) DecodeBody() (*Body, error) {
 	var bd Body
 	switch r.Body.(type) {
@@ -54,23 +71,23 @@ func (r *Response) DecodeBody() (*Body, error) {
 	}
 	return &bd, nil
 }
-func DecodeBody[T any](r *Response) (*BodyWith[T], error) {
-	var bd BodyWith[T]
+func DecodeBody(r *Response, body interface{}) error {
+
 	switch r.Body.(type) {
 	case string:
-		err := json.Unmarshal([]byte(r.Body.(string)), &bd)
+		err := json.Unmarshal([]byte(r.Body.(string)), body)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	default:
 		marshal, err := json.Marshal(r.Body)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		err = json.Unmarshal(marshal, &bd)
+		err = json.Unmarshal(marshal, body)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return &bd, nil
+	return nil
 }
