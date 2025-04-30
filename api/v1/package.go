@@ -24,7 +24,10 @@ func AddBizPackage(c *gin.Context) {
 		response.FailWithMessage(c, "参数错误")
 		return
 	}
-	newRunner := runner.NewRunner(*r.Runner)
+	newRunner, err := runner.NewRunner(*r.Runner)
+	if err != nil {
+		panic(err)
+	}
 	rsp, err = newRunner.AddBizPackage(&r)
 	if err != nil {
 		response.FailWithMessage(c, err.Error())
@@ -48,7 +51,7 @@ func CreateProject(c *gin.Context) {
 		return
 	}
 
-	newRunner := runner.NewRunner(r.Runner)
+	newRunner, err := runner.NewRunner(r.Runner)
 	project, err := newRunner.CreateProject()
 	if err != nil {
 		response.FailWithMessage(c, err.Error())

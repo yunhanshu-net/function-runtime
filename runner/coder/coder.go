@@ -14,14 +14,6 @@ type Coder interface {
 }
 
 func NewCoder(runner *model.Runner) (Coder, error) {
-
-	if runner.Version == "" {
-		version, err := runner.GetLatestVersion()
-		if err != nil {
-			return nil, err
-		}
-		runner.Version = version
-	}
 	switch runner.Language {
 	case "go":
 		return &Golang{runnerRoot: conf.GetRunnerRoot(), runner: runner}, nil

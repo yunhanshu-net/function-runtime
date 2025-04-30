@@ -40,7 +40,16 @@ type Runner interface {
 	Request(ctx context.Context, req *request.Request) (*response.Response, error)
 }
 
-func NewRunner(runner model.Runner) Runner {
+func NewRunner(runner model.Runner) (Runner, error) {
+
+	if runner.Version == "" {
+		version, err := runner.GetLatestVersion()
+		if err != nil {
+			return nil, err
+		}
+		runner.Version = version
+	}
+
 	runnerCoder, _ := coder.NewCoder(&runner)
 
 	cmd := &cmdRunner{
@@ -55,9 +64,9 @@ func NewRunner(runner model.Runner) Runner {
 		connected:      false}
 
 	if runner.Kind == "cmd" {
-		return cmd
+		return cmd, nil
 	}
-	return cmd
+	return cmd, nil
 }
 
 type cmdRunner struct {
@@ -255,6 +264,9 @@ func (r *cmdRunner) shouldBeClose() bool {
 }
 
 func (r *cmdRunner) Request(ctx context.Context, runnerRequest *request.Request) (*response.Response, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	//这里检查是否需要启动程序
 	r.qpsLock.Lock()
 	r.latestHandelTs = time.Now()

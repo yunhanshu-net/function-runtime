@@ -14,8 +14,9 @@ func InitRouter(r *gin.Engine) {
 	api := r.Group("/api")
 	api.Any("/runner/:user/:runner/*router", v1.Runner)
 
-	api.POST("/coder/AddApi", v1.AddApi)
-	api.POST("/coder/AddApis", v1.AddApis)
-	api.POST("/coder/AddBizPackage", v1.AddBizPackage)
-	api.POST("/coder/CreateProject", v1.CreateProject)
+	//api.POST("/coder/AddApi", v1.AddApi)
+	api.Any("/coder/:manage", v1.Manage)
+	//api.POST("/coder/AddApis", v1.AddApis)
+	//api.POST("/coder/AddBizPackage", v1.AddBizPackage)
+	//api.POST("/coder/CreateProject", v1.CreateProject)
 }

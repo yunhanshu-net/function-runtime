@@ -19,7 +19,7 @@ func main() {
 	//conns.Init()
 	logger.Setup()
 	cmd.Init()
-	cmd.Runcher.Run()
+
 	defer cmd.Runcher.Close()
 
 	app := gin.New()

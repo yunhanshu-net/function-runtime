@@ -11,7 +11,6 @@ import (
 	"github.com/yunhanshu-net/runcher/model/response"
 	"github.com/yunhanshu-net/runcher/runner"
 	"github.com/yunhanshu-net/runcher/runtime"
-	"strings"
 	"sync"
 )
 
@@ -51,58 +50,6 @@ func NewScheduler(conn *nats.Conn) *Scheduler {
 	}
 }
 
-func (s *Scheduler) Run() error {
-	logrus.Infof("Scheduler Run")
-
-	//group := uuid.New().String()
-	//监听runner的启动和关闭事件
-	subscribe, err := s.natsConn.Subscribe("close.runner", func(msg *nats.Msg) {
-		logrus.Infof("runner.close >%s uid:%s", msg.Subject, string(msg.Data))
-		//接收runner关闭
-		var m model.Runner
-		m.Version = msg.Header.Get("version")
-		m.User = msg.Header.Get("user")
-		m.Name = msg.Header.Get("name")
-		err := s.stopRunner(&m)
-		if err != nil {
-			logrus.Errorf("runner:%s close err:%s", m.GetRequestSubject(), err.Error())
-			return
-		}
-		rsp := nats.NewMsg(msg.Subject)
-		rsp.Header.Set("code", "0")
-		err = msg.RespondMsg(rsp)
-		if err != nil {
-			logrus.Errorf("runner:%s close err:%s", m.GetRequestSubject(), err.Error())
-			return
-		}
-		logrus.Infof("runner:%s close success", m.GetRequestSubject())
-
-	})
-	if err != nil {
-		return err
-	}
-	s.closeSub = subscribe
-
-	coderSub, err := s.natsConn.Subscribe("coder.>", func(msg *nats.Msg) {
-		subjects := strings.Split(msg.Subject, ".")
-		subject := subjects[1]
-		if subject == "add_api" {
-			s.AddApiByNats(msg)
-		}
-
-		if subject == "add_apis" {
-			s.AddApiByNats(msg)
-		}
-
-	})
-	if err != nil {
-		return err
-	}
-	s.coderSub = coderSub
-
-	return nil
-}
-
 func (s *Scheduler) stopRunner(runner *model.Runner) error {
 	s.runnerLock.Lock()
 	defer s.runnerLock.Unlock()
@@ -128,28 +75,36 @@ func (s *Scheduler) Close() error {
 		}
 	}
 	s.closeSub.Unsubscribe()
+	s.coderSub.Unsubscribe()
 	return nil
 }
 
-func (s *Scheduler) getAndSetRunner(r *model.Runner) *runtime.Runners {
+func (s *Scheduler) getAndSetRunner(r *model.Runner) (*runtime.Runners, error) {
 	s.runnerLock.Lock()
 	defer s.runnerLock.Unlock()
 	name := r.GetRequestSubject()
 	runtimeRunner, ok := s.runtimeRunners[name]
 	if !ok {
-		rn := runner.NewRunner(*r)
+		rn, err := runner.NewRunner(*r)
+		if err != nil {
+			return nil, err
+		}
 		runners := runtime.NewRunners(rn)
 		runners.StartLock[rn.GetID()] = &sync.Mutex{}
 		s.runtimeRunners[name] = runners
 		s.runtimeRunners[name] = runners
 
-		return runners
+		return runners, nil
 	}
-	return runtimeRunner
+	return runtimeRunner, nil
 }
 
-func (s *Scheduler) getRunner(r *model.Runner) runner.Runner {
-	return s.getAndSetRunner(r).GetOne()
+func (s *Scheduler) getRunner(r *model.Runner) (runner.Runner, error) {
+	setRunner, err := s.getAndSetRunner(r)
+	if err != nil {
+		return nil, err
+	}
+	return setRunner.GetOne(), nil
 }
 
 func (s *Scheduler) Request(request *request.RunnerRequest) (*response.Response, error) {
@@ -162,7 +117,10 @@ func (s *Scheduler) Request(request *request.RunnerRequest) (*response.Response,
 		}
 		request.Runner.Version = version
 	}
-	rt := s.getAndSetRunner(request.Runner)
+	rt, err := s.getAndSetRunner(request.Runner)
+	if err != nil {
+		return nil, err
+	}
 	r := rt.GetOne()
 	if r == nil {
 		return nil, errors.New("runner not found")
@@ -175,7 +133,8 @@ func (s *Scheduler) Request(request *request.RunnerRequest) (*response.Response,
 
 	if qps >= highQPSThreshold && r.GetStatus() == runner.StatusClosed { //如果不在启动中，那就启动
 		//	启动连接
-		lock := rt.StartLock[r.GetID()].TryLock()
+		lk := rt.StartLock[r.GetID()]
+		lock := lk.TryLock()
 		if lock { //加锁成功！
 			logrus.Infof("当前qps：%v尝试启动连接", qps)
 			err := r.Connect(s.natsConn)
@@ -183,13 +142,14 @@ func (s *Scheduler) Request(request *request.RunnerRequest) (*response.Response,
 				logrus.Errorf("连接启动失败：%+v err:%s", r.GetInfo(), err)
 				return nil, err
 			}
-			rt.StartLock[r.GetID()].Unlock()
+			lk.Unlock()
 		}
 	}
 
 	if rt.GetCurrentQps() >= highQPSThreshold && r.GetStatus() == runner.StatusConnecting { //如果在启动中
-		rt.StartLock[r.GetID()].Lock()
-		rt.StartLock[r.GetID()].Unlock()
+		lk := rt.StartLock[r.GetID()]
+		lk.Lock()
+		lk.Unlock()
 	}
 
 	runnerResponse, err := r.Request(context.Background(), request.Request)

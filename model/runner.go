@@ -3,7 +3,11 @@ package model
 import (
 	"fmt"
 	"github.com/yunhanshu-net/runcher/conf"
-	"github.com/yunhanshu-net/runcher/pkg/osx"
+	"github.com/yunhanshu-net/runcher/model/dto/api"
+	"github.com/yunhanshu-net/runcher/pkg/jsonx"
+	"os"
+	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -30,26 +34,62 @@ func (r *Runner) GetRequestSubject() string {
 }
 
 func (r *Runner) GetLatestVersion() (string, error) {
-	path := conf.GetRunnerRoot() + "/" + r.User + "/" + r.Name + "/" + "version"
-	if !osx.DirExists(path) {
-		return "v0", nil
-	}
-	directories, err := osx.CountDirectories(path)
+	versions, err := r.GetLatestVersions(1)
 	if err != nil {
 		return "", err
 	}
-	if directories == 0 {
-		return "v0", nil
-	}
-	return fmt.Sprintf("v%v", directories-1), nil
-}
-func (r *Runner) GetUnixFileName() string {
-	return fmt.Sprintf("%s_%s_%s.sock", r.User, r.Name, r.Version)
+	return versions[0], nil
 }
 
-func (r *Runner) GetUnixPathFile() string {
-	return fmt.Sprintf("%s/%s/%s/bin/%s", conf.GetRunnerRoot(), r.User, r.Name, r.GetUnixFileName())
+// GetLatestVersions 返回指定目录下最新的若干个版本目录（如 v0, v1, v2...）
+func (r *Runner) GetLatestVersions(count int) ([]string, error) {
+	path := conf.GetRunnerRoot() + "/" + r.User + "/" + r.Name + "/" + "version"
+	// 读取目录内容
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil, fmt.Errorf("目录读取失败：%s", err.Error())
+	}
+
+	// 收集所有合法的版本号
+	var versions []int
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if len(name) < 2 || name[0] != 'v' {
+			continue
+		}
+		numStr := name[1:]
+		num, err := strconv.Atoi(numStr)
+		if err != nil {
+			continue
+		}
+		versions = append(versions, num)
+	}
+
+	// 按版本号从大到小排序
+	sort.Slice(versions, func(i, j int) bool {
+		return versions[i] > versions[j]
+	})
+
+	// 截取指定数量
+	if count < 0 {
+		count = 0
+	}
+	if len(versions) > count {
+		versions = versions[:count]
+	}
+
+	// 转换为字符串形式
+	result := make([]string, len(versions))
+	for i, v := range versions {
+		result[i] = fmt.Sprintf("v%d", v)
+	}
+
+	return result, nil
 }
+
 func (r *Runner) GetBinPath() string {
 	return fmt.Sprintf("%s/%s/%s/bin", conf.GetRunnerRoot(), r.User, r.Name)
 }
@@ -124,4 +164,57 @@ func (r *Runner) GetNextVersionInstallPath(rootPath string) (string, error) {
 func (r *Runner) Check() error {
 
 	return nil
+}
+
+func (r *Runner) GetApiPath() string {
+	return fmt.Sprintf("%s/%s/%s/bin/api-logs", conf.GetRunnerRoot(), r.User, r.Name)
+}
+
+func (r *Runner) DiffApi(old string, new string) (add []*api.Info, del []*api.Info, updated []*api.Info, err error) {
+	newApiInfos := &api.ApiLogs{}
+	oldApiInfos := &api.ApiLogs{}
+	if old == new {
+		err = jsonx.UnmarshalFromFile(old, oldApiInfos)
+		if err != nil {
+			return
+		}
+	}
+	err = jsonx.UnmarshalFromFile(new, newApiInfos)
+	if err != nil {
+		return
+	}
+	// 创建旧API的映射，用于快速查找
+	lastApiMap := make(map[string]*api.Info)
+	for _, lastApi := range oldApiInfos.Apis {
+		key := fmt.Sprintf("%s:%s", lastApi.Method, lastApi.Router)
+		lastApiMap[key] = lastApi
+	}
+
+	// 遍历当前API，查找新增和更新的API
+	for _, currentApi := range newApiInfos.Apis {
+		key := fmt.Sprintf("%s:%s", currentApi.Method, currentApi.Router)
+		// 检查API是否在上一版本中存在
+		if lastApi, exists := lastApiMap[key]; exists {
+			// 检查API是否有更新
+			if !apiEqual(currentApi, lastApi) {
+				updated = append(updated, currentApi)
+			}
+			// 标记已处理过的API
+			delete(lastApiMap, key)
+		} else {
+			// 新增的API
+			add = append(add, currentApi)
+		}
+	}
+	// 剩余未处理的旧API即为已删除的API
+	for _, api := range lastApiMap {
+		del = append(del, api)
+	}
+	return
+}
+
+// apiEqual 比较两个API是否相等
+func apiEqual(a, b *api.Info) bool {
+	// 使用reflect.DeepEqual进行深度比较
+	return reflect.DeepEqual(a, b)
 }

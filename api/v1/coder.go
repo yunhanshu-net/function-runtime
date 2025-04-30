@@ -6,6 +6,7 @@ import (
 	"github.com/yunhanshu-net/runcher/model/dto/coder"
 	"github.com/yunhanshu-net/runcher/model/response"
 	"github.com/yunhanshu-net/runcher/runner"
+	"github.com/yunhanshu-net/runcher/service/http2nats"
 )
 
 func AddApi(c *gin.Context) {
@@ -24,7 +25,10 @@ func AddApi(c *gin.Context) {
 	}
 	//err = cmd.Runcher.Coder.AddApi(&r)
 
-	newRunner := runner.NewRunner(*r.Runner)
+	newRunner, err := runner.NewRunner(*r.Runner)
+	if err != nil {
+		panic(err)
+	}
 	rsp, err = newRunner.AddApi(r.CodeApi)
 	if err != nil {
 		response.FailWithMessage(c, err.Error())
@@ -49,11 +53,23 @@ func AddApis(c *gin.Context) {
 		return
 	}
 
-	newRunner := runner.NewRunner(*r.Runner)
+	newRunner, err := runner.NewRunner(*r.Runner)
+	if err != nil {
+		panic(err)
+	}
 	rsp, err = newRunner.AddApis(r.CodeApis)
 	if err != nil {
 		response.FailWithMessage(c, err.Error())
 		return
 	}
 	response.OkWithData(c, rsp)
+}
+
+func Manage(c *gin.Context) {
+	data, err := http2nats.GinRequest(c)
+	if err != nil {
+		response.FailWithMessage(c, err.Error())
+		return
+	}
+	c.Data(200, "application/json", data)
 }

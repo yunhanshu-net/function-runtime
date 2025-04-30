@@ -26,6 +26,10 @@ type Runcher struct {
 	manageSub *nats.Subscription
 }
 
+func (a *Runcher) GetNatsConn() *nats.Conn {
+	return a.natsConn
+}
+
 // MustNewRuncher 创建一个新的Runcher实例
 // 如果初始化过程中出现任何错误，将会panic
 func MustNewRuncher() *Runcher {

@@ -2,6 +2,7 @@ package coder
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"github.com/yunhanshu-net/runcher/model"
 	"github.com/yunhanshu-net/runcher/model/dto/coder"
 	"github.com/yunhanshu-net/runcher/pkg/codes"
@@ -34,6 +35,7 @@ func (g *Golang) AddApi(codeApi *coder.CodeApi) (*coder.AddApiResp, error) {
 func (g *Golang) createFile(filePath string, content string) error {
 	codeFile, err := os.Create(filePath)
 	if err != nil {
+		logrus.Infof("[createFile] Create filePath:%s err: %v", filePath, err)
 		return err
 	}
 	defer codeFile.Close()
@@ -102,6 +104,7 @@ func (g *Golang) AddBizPackage(codeBizPackage *coder.BizPackage) (*coder.BizPack
 }
 
 func (g *Golang) CreateProject() (*coder.CreateProjectResp, error) {
+	logrus.Infof("Create project:%+v", g.runner)
 	runner := g.runner
 	err := os.MkdirAll(runner.GetToolPath(g.runnerRoot), 0755) //初始化项目目录
 	if err != nil {
