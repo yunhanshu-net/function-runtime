@@ -6,6 +6,11 @@ import (
 	"github.com/yunhanshu-net/runcher/model"
 	"github.com/yunhanshu-net/runcher/model/dto/syscallback"
 	"github.com/yunhanshu-net/runcher/model/request"
+	"github.com/yunhanshu-net/runcher/pkg/jsonx"
+)
+
+const (
+	sysCallbackSysOnVersionChange = "sysOnVersionChange"
 )
 
 func (s *Scheduler) SysCallback(callbackType string, r *model.Runner, body interface{}) (interface{}, error) {
@@ -13,7 +18,7 @@ func (s *Scheduler) SysCallback(callbackType string, r *model.Runner, body inter
 	runnerRequest := &request.Request{
 		Route:  "/_sysCallback/" + callbackType,
 		Method: "POST",
-		Body:   body}
+		Body:   jsonx.JSONString(body)}
 	runnerIns, err := s.getRunner(r)
 	if err != nil {
 		return nil, err
@@ -22,11 +27,12 @@ func (s *Scheduler) SysCallback(callbackType string, r *model.Runner, body inter
 	if err != nil {
 		return nil, err
 	}
-	if !rsp.OK() {
-		return nil, fmt.Errorf(rsp.Msg)
-	}
+	fmt.Println(rsp)
+	//if !rsp.OK() {
+	//	return nil, fmt.Errorf(rsp.Msg)
+	//}
 	switch callbackType {
-	case "SysOnVersionChange":
+	case sysCallbackSysOnVersionChange:
 		change, err := sysOnVersionChange(r)
 		if err != nil {
 			return nil, err

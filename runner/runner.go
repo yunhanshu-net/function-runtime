@@ -50,7 +50,10 @@ func NewRunner(runner model.Runner) (Runner, error) {
 		runner.Version = version
 	}
 
-	runnerCoder, _ := coder.NewCoder(&runner)
+	runnerCoder, err := coder.NewCoder(&runner)
+	if err != nil {
+		return nil, err
+	}
 
 	cmd := &cmdRunner{
 		Coder:          runnerCoder,
@@ -189,45 +192,65 @@ func (r *cmdRunner) Close() error {
 }
 
 func (r *cmdRunner) requestByFile(req *request.Request) (*response.Response, error) {
+	logrus.Infof("开始通过文件方式处理请求: route=%s", req.Route)
+	logrus.Debugf("请求内容: %+v", req)
+
 	fileName := strconv.Itoa(int(time.Now().UnixMicro())) + ".json"
 	requestJsonPath := r.detail.GetBinPath() + "/.request/" + fileName
 	binPath := r.detail.GetBinPath()
-	reqCall := request.RunnerRequest{
-		Request: req,
-		Runner:  r.detail,
-	}
+	reqCall := request.RunnerRequest{Request: req, Runner: r.detail}
+
+	logrus.Debugf("准备保存请求文件: path=%s", requestJsonPath)
+	reqJson, _ := json.MarshalIndent(reqCall, "", "  ")
+	logrus.Debugf("请求文件内容: %s", string(reqJson))
+
 	err := jsonx.SaveFile(requestJsonPath, reqCall)
 	if err != nil {
+		logrus.Errorf("保存请求文件失败: path=%s, error=%v", requestJsonPath, err)
 		return nil, err
 	}
+	logrus.Debugf("请求文件保存成功: path=%s", requestJsonPath)
 
 	cc := fmt.Sprintf("cd %s && ./%s %s .request/%s",
 		binPath, r.detail.GetBuildRunnerCurrentVersionName(), req.Route, fileName)
 	// Linux和macOS可以直接使用 && 连接命令
 	cmd := exec.Command("sh", "-c", cc)
-	logrus.Debugf("执行命令: %s", cc)
+	logrus.Infof("开始执行命令: %s", cc)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	err = cmd.Run()
 	if err != nil {
-		logrus.Errorf("命令执行失败: %s, 命令: %s", err.Error(), cc)
+		logrus.Errorf("命令执行失败: error=%v, command=%s", err, cc)
 		return nil, err
 	}
+	logrus.Debugf("命令执行完成，开始处理输出")
+
 	outString := out.String()
 	if outString == "" {
+		logrus.Error("命令输出为空")
 		return nil, fmt.Errorf("命令输出为空，请检查程序是否正确")
 	}
+	logrus.Debugf("命令输出长度: %d", len(outString))
+	logrus.Debugf("命令原始输出: %s", outString)
 
 	resList := stringsx.ParserHtmlTagContent(outString, "Response")
+	logrus.Debugf("解析到Response标签数量: %d", len(resList))
 
 	if len(resList) == 0 {
+		logrus.Error("未找到Response标签")
 		return nil, fmt.Errorf("请使用SDK开发软件，未找到正确的响应格式")
 	}
+
 	var res response.Response
 	err = json.Unmarshal([]byte(resList[0]), &res)
 	if err != nil {
+		logrus.Errorf("解析响应JSON失败: error=%v", err)
 		return nil, fmt.Errorf("解析响应失败: %w", err)
 	}
+
+	resJson, _ := json.MarshalIndent(res, "", "  ")
+	logrus.Infof("响应内容: %s", string(resJson))
+	logrus.Infof("请求处理完成: route=%s", req.Route)
 	return &res, nil
 }
 

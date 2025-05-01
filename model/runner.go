@@ -12,13 +12,56 @@ import (
 	"strings"
 )
 
+func isVersion(v string) bool {
+	if v == "" {
+		return false
+	}
+	if v[0] != 'v' {
+		return false
+	}
+	s := v[1:]
+	i, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return false
+	}
+	return i >= 0
+
+}
+
 type Runner struct {
 	Kind     string `json:"kind"`     //类型，可执行程序，so文件等等
 	Language string `json:"language"` //编程语言
 	Name     string `json:"name"`     //应用名称（英文标识）
 	Version  string `json:"version"`  //应用版本
 	User     string `json:"user"`     //所属租户
+}
 
+func NewRunner(user string, name string, version ...string) (*Runner, error) {
+	if user == "" {
+		return nil, fmt.Errorf("user is empty")
+	}
+	if name == "" {
+		return nil, fmt.Errorf("name is empty")
+	}
+	r := Runner{
+		User: user,
+		Name: name,
+	}
+	v := ""
+	if len(version) > 0 {
+		v = version[0]
+		b := isVersion(v)
+		if !b {
+			return nil, fmt.Errorf("is failed version")
+		}
+	} else {
+		vs, err := r.GetLatestVersion()
+		if err != nil {
+			return nil, err
+		}
+		r.Version = vs
+	}
+	return &r, nil
 }
 
 func (r *Runner) GetRequestSubject() string {
@@ -173,7 +216,7 @@ func (r *Runner) GetApiPath() string {
 func (r *Runner) DiffApi(old string, new string) (add []*api.Info, del []*api.Info, updated []*api.Info, err error) {
 	newApiInfos := &api.ApiLogs{}
 	oldApiInfos := &api.ApiLogs{}
-	if old == new {
+	if old != "" {
 		err = jsonx.UnmarshalFromFile(old, oldApiInfos)
 		if err != nil {
 			return

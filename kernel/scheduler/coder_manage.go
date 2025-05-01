@@ -5,6 +5,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"github.com/yunhanshu-net/runcher/model"
 	"github.com/yunhanshu-net/runcher/model/dto/coder"
 	"github.com/yunhanshu-net/runcher/model/dto/syscallback"
 	"github.com/yunhanshu-net/runcher/runner"
@@ -22,7 +23,8 @@ func (s *Scheduler) addApiByNats(req *coder.AddApiReq) (*coder.AddApiResp, error
 		err = errors.WithMessage(err, "AddApi err")
 		return nil, err
 	}
-	callback, err := s.SysCallback("SysOnVersionChange", req.Runner, &syscallback.SysOnVersionChangeReq{})
+	req.Runner.Version = req.Runner.GetNextVersion()
+	callback, err := s.SysCallback("sysOnVersionChange", req.Runner, &syscallback.SysOnVersionChangeReq{})
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +43,8 @@ func (s *Scheduler) addApisByNats(req *coder.AddApisReq) (*coder.AddApisResp, er
 		err = errors.WithMessage(err, "addApisByNats err")
 		return nil, err
 	}
-	callback, err := s.SysCallback("SysOnVersionChange", req.Runner, &syscallback.SysOnVersionChangeReq{})
+	req.Runner.Version = req.Runner.GetNextVersion()
+	callback, err := s.SysCallback("sysOnVersionChange", req.Runner, &syscallback.SysOnVersionChangeReq{})
 	if err != nil {
 		return nil, err
 	}
@@ -74,6 +77,11 @@ func (s *Scheduler) AddApiByNats(msg *nats.Msg) {
 	if err != nil {
 		return
 	}
+	newRunner, err := model.NewRunner(req.Runner.User, req.Runner.Name)
+	if err != nil {
+		return
+	}
+	req.Runner = newRunner
 	resp, err = s.addApiByNats(&req)
 	if err != nil {
 		return
@@ -108,6 +116,12 @@ func (s *Scheduler) AddApisByNats(msg *nats.Msg) {
 	if err != nil {
 		return
 	}
+	newRunner, err := model.NewRunner(req.Runner.User, req.Runner.Name)
+	if err != nil {
+		return
+	}
+	req.Runner = newRunner
+
 	resp, err = s.addApisByNats(&req)
 	if err != nil {
 		return
@@ -154,6 +168,11 @@ func (s *Scheduler) AddBizPackage(msg *nats.Msg) {
 	if err != nil {
 		return
 	}
+	newRunner, err := model.NewRunner(req.Runner.User, req.Runner.Name)
+	if err != nil {
+		return
+	}
+	req.Runner = newRunner
 	resp, err = s.addBizPackage(&req)
 	if err != nil {
 		return
