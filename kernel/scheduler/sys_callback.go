@@ -1,3 +1,4 @@
+// Package scheduler runcher内核的系统调用，内核态，用户侧无感知
 package scheduler
 
 import (
@@ -13,7 +14,7 @@ const (
 	sysCallbackSysOnVersionChange = "sysOnVersionChange"
 )
 
-func (s *Scheduler) SysCallback(callbackType string, r *model.Runner, body interface{}) (interface{}, error) {
+func (s *Scheduler) SysCallback(ctx context.Context, callbackType string, r *model.Runner, body interface{}) (interface{}, error) {
 
 	runnerRequest := &request.Request{
 		Route:  "/_sysCallback/" + callbackType,
@@ -23,7 +24,7 @@ func (s *Scheduler) SysCallback(callbackType string, r *model.Runner, body inter
 	if err != nil {
 		return nil, err
 	}
-	rsp, err := runnerIns.Request(context.Background(), runnerRequest)
+	rsp, err := runnerIns.Request(ctx, runnerRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +34,7 @@ func (s *Scheduler) SysCallback(callbackType string, r *model.Runner, body inter
 	//}
 	switch callbackType {
 	case sysCallbackSysOnVersionChange:
-		change, err := sysOnVersionChange(r)
+		change, err := sysOnVersionChange(ctx, r)
 		if err != nil {
 			return nil, err
 		}
@@ -44,7 +45,7 @@ func (s *Scheduler) SysCallback(callbackType string, r *model.Runner, body inter
 	return nil, fmt.Errorf("callbackType not found")
 }
 
-func sysOnVersionChange(runner *model.Runner) (*syscallback.SysOnVersionChangeResp, error) {
+func sysOnVersionChange(ctx context.Context, runner *model.Runner) (*syscallback.SysOnVersionChangeResp, error) {
 	var resp syscallback.SysOnVersionChangeResp
 	resp.CurrentVersion = runner.Version
 	versions, err := runner.GetLatestVersions(2)
@@ -60,7 +61,9 @@ func sysOnVersionChange(runner *model.Runner) (*syscallback.SysOnVersionChangeRe
 	newVersionPath := runner.GetApiPath() + "/" + newVersion + ".json"
 	if len(versions) > 1 {
 		oldVersion = versions[1]
-		oldVersionPath = runner.GetApiPath() + "/" + oldVersion + ".json"
+		if oldVersion != "v0" {
+			oldVersionPath = runner.GetApiPath() + "/" + oldVersion + ".json"
+		}
 	}
 	add, del, updated, err := runner.DiffApi(oldVersionPath, newVersionPath)
 	if err != nil {

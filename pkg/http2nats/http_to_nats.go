@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/nats-io/nats.go"
-	"github.com/yunhanshu-net/runcher/kernel"
 	"io"
 	"strings"
 	"time"
@@ -12,14 +11,15 @@ import (
 
 var conn *HttpToNats
 
-func Setup(runcher *kernel.Runcher) {
+func Setup(c *nats.Conn) {
 	conn = &HttpToNats{
-		runcher,
+		c,
 	}
 }
 
 type HttpToNats struct {
-	runcher *kernel.Runcher
+	//runcher *kernel.Runcher
+	natsConn *nats.Conn
 }
 
 func GinRequest(c *gin.Context) (rspBodyData []byte, err error) {
@@ -35,12 +35,15 @@ func GinRequest(c *gin.Context) (rspBodyData []byte, err error) {
 	} else {
 		return nil, fmt.Errorf("invalid method")
 	}
+	traceId := c.GetHeader("x-trace-id")
+
+	msg.Header.Set("trace_id", traceId)
 	all, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		return nil, err
 	}
 	msg.Data = all
-	natsConn := conn.runcher.GetNatsConn()
+	natsConn := conn.natsConn
 	rspMsg, err := natsConn.RequestMsg(msg, time.Second*20)
 	if err != nil {
 		return nil, err

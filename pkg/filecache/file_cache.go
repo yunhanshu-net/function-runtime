@@ -2,7 +2,7 @@ package filecache
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
+	"github.com/yunhanshu-net/runcher/pkg/logger"
 	"github.com/yunhanshu-net/runcher/pkg/osx"
 	"sync"
 	"time"
@@ -52,7 +52,7 @@ func (c *LocalFileCache) check() {
 				if time.Now().Unix() > file.ExpireTime { //说明已经过期需要删除文件
 					c.mutex.Lock()
 					p := file.FilePath
-					logrus.Infof("删除文件：%s\n", p)
+					logger.Infof("删除文件：%s\n", p)
 					go osx.DeleteFileOrDir(p)
 					delete(c.fileMap, s)
 					c.mutex.Unlock()
@@ -60,7 +60,7 @@ func (c *LocalFileCache) check() {
 			}
 			for file, task := range c.deleteTask { //移除到期文件
 				if time.Now().Unix() > int64(task.expireTime) {
-					logrus.Infof("删除文件：%s\n", file)
+					logger.Infof("删除文件：%s\n", file)
 					go osx.DeleteFileOrDir(file)
 					delete(c.deleteTask, file)
 				}

@@ -38,6 +38,15 @@ type Info struct {
 	Callbacks []string `json:"callbacks"`
 }
 
+func (i *Info) ExistCallback(callback string) bool {
+	for _, s := range i.Callbacks {
+		if callback == s {
+			return true
+		}
+	}
+	return false
+}
+
 type ApiLogs struct {
 	Version string  `json:"version"`
 	Apis    []*Info `json:"apis"`

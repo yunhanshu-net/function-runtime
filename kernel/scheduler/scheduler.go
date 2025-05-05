@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"github.com/nats-io/nats.go"
-	"github.com/sirupsen/logrus"
 	"github.com/yunhanshu-net/runcher/conf"
 	"github.com/yunhanshu-net/runcher/model"
 	"github.com/yunhanshu-net/runcher/model/request"
 	"github.com/yunhanshu-net/runcher/model/response"
+	"github.com/yunhanshu-net/runcher/pkg/logger"
 	"github.com/yunhanshu-net/runcher/runner"
 	"github.com/yunhanshu-net/runcher/runtime"
 	"sync"
@@ -18,6 +18,7 @@ const (
 	highQPSThreshold = 3 // 每秒3请求视为高并发
 )
 
+// Scheduler 调度器结构体
 type Scheduler struct {
 	RunnerRoot     string
 	natsConn       *nats.Conn
@@ -26,6 +27,9 @@ type Scheduler struct {
 	runtimeRunners map[string]*runtime.Runners
 	runnerLock     *sync.Mutex
 	sockInfoLk     *sync.Mutex
+	ctx            context.Context
+	cancel         context.CancelFunc
+	wg             sync.WaitGroup
 }
 
 func (s *Scheduler) closeRunner(path string) error {
@@ -40,13 +44,17 @@ func (s *Scheduler) closeRunner(path string) error {
 	return nil
 }
 
+// NewScheduler 创建新的调度器实例
 func NewScheduler(conn *nats.Conn) *Scheduler {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Scheduler{
 		RunnerRoot:     conf.GetRunnerRoot(),
 		natsConn:       conn,
 		runnerLock:     &sync.Mutex{},
 		runtimeRunners: make(map[string]*runtime.Runners),
 		sockInfoLk:     &sync.Mutex{},
+		ctx:            ctx,
+		cancel:         cancel,
 	}
 }
 
@@ -63,15 +71,34 @@ func (s *Scheduler) stopRunner(runner *model.Runner) error {
 	return nil
 }
 
-func (s *Scheduler) Close() error {
-	for unix, v := range s.runtimeRunners {
+//// Run 运行调度器
+//func (s *Scheduler) Run() error {
+//	// 订阅主题
+//	sub, err := s.natsConn.Subscribe("scheduler.>", func(msg *nats.Msg) {
+//		// 处理消息
+//		// ...
+//	})
+//	if err != nil {
+//		return fmt.Errorf("订阅主题失败: %w", err)
+//	}
+//
+//	// 启动监控协程
+//
+//
+//	return nil
+//}
 
+// Close 关闭调度器
+func (s *Scheduler) Close() error {
+	s.cancel()
+	s.wg.Wait()
+	for unix, v := range s.runtimeRunners {
 		for _, r := range v.Running {
 			err := r.Close()
 			if err != nil {
-				logrus.Errorf("runner:%s close err:%s", unix, err.Error())
+				logger.Errorf("runner:%s close err:%s", unix, err.Error())
 			}
-			logrus.Infof("runner:%s close success", unix)
+			logger.Infof("runner:%s close success", unix)
 		}
 	}
 	s.closeSub.Unsubscribe()
@@ -107,7 +134,7 @@ func (s *Scheduler) getRunner(r *model.Runner) (runner.Runner, error) {
 	return setRunner.GetOne(), nil
 }
 
-func (s *Scheduler) Request(request *request.RunnerRequest) (*response.Response, error) {
+func (s *Scheduler) Request(ctx context.Context, request *request.RunnerRequest) (*response.Response, error) {
 
 	//假如没带版本
 	if request.Runner.Version == "" {
@@ -126,7 +153,7 @@ func (s *Scheduler) Request(request *request.RunnerRequest) (*response.Response,
 		return nil, errors.New("runner not found")
 	}
 	if r.IsRunning() { //如果有运行中的实例，直接请求
-		return r.Request(context.Background(), request.Request)
+		return r.Request(ctx, request.Request)
 	}
 	qps := rt.GetCurrentQps()
 	rt.AddQps(1)
@@ -136,10 +163,10 @@ func (s *Scheduler) Request(request *request.RunnerRequest) (*response.Response,
 		lk := rt.StartLock[r.GetID()]
 		lock := lk.TryLock()
 		if lock { //加锁成功！
-			logrus.Infof("当前qps：%v尝试启动连接", qps)
+			logger.Infof("当前qps：%v尝试启动连接", qps)
 			err := r.Connect(s.natsConn)
 			if err != nil {
-				logrus.Errorf("连接启动失败：%+v err:%s", r.GetInfo(), err)
+				logger.Errorf("连接启动失败：%+v err:%s", r.GetInfo(), err)
 				return nil, err
 			}
 			lk.Unlock()
@@ -152,7 +179,7 @@ func (s *Scheduler) Request(request *request.RunnerRequest) (*response.Response,
 		lk.Unlock()
 	}
 
-	runnerResponse, err := r.Request(context.Background(), request.Request)
+	runnerResponse, err := r.Request(ctx, request.Request)
 	if err != nil {
 		return nil, err
 	}

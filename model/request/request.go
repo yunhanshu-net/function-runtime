@@ -1,9 +1,11 @@
 package request
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/yunhanshu-net/runcher/model"
+	"github.com/yunhanshu-net/runcher/pkg/constants"
 )
 
 type Request struct {
@@ -15,6 +17,14 @@ type Request struct {
 	Body       interface{}         `json:"body"`        //请求json
 	BodyString string              `json:"body_string"` //请求json
 	FileMap    map[string][]string `json:"file_map"`
+}
+
+func (r *Request) WithContext(ctx context.Context) *Request {
+	value := ctx.Value(constants.TraceID)
+	if value != nil {
+		r.TraceID = value.(string)
+	}
+	return r
 }
 
 type Ping struct {

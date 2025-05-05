@@ -6,6 +6,8 @@ import (
 	"github.com/natefinch/lumberjack"
 	"github.com/sirupsen/logrus"
 	"os"
+	"path/filepath"
+	"runtime"
 	"time"
 )
 
@@ -16,7 +18,7 @@ type Option struct {
 var isDev bool
 
 func init() {
-	isDev = os.Getenv("IS_DEV") == "true"
+	isDev = os.Getenv("ENV") == "dev"
 }
 
 // Setup ...
@@ -31,11 +33,23 @@ func Setup(option ...*Option) {
 
 	logrus.SetReportCaller(true)
 	if isDev {
-		logrus.SetFormatter(&logrus.TextFormatter{TimestampFormat: time.DateTime})
-		logrus.SetOutput(mw)
-		logrus.AddHook(&consoleHook{logger: logrus.StandardLogger()})
+		// 开发环境配置
+		logrus.SetLevel(logrus.DebugLevel)
+		logrus.SetFormatter(&logrus.TextFormatter{
+			TimestampFormat: time.DateTime,
+			FullTimestamp:   true,
+			CallerPrettyfier: func(f *runtime.Frame) (string, string) {
+				// 简化文件路径显示
+				_, filename := filepath.Split(f.File)
+				return "", fmt.Sprintf("%s:%d", filename, f.Line)
+			},
+		})
+		logrus.SetOutput(os.Stdout) // 开发环境直接输出到控制台
 	} else {
+		// 生产环境配置
+		logrus.SetLevel(logrus.InfoLevel)
 		logrus.SetFormatter(&logrus.JSONFormatter{TimestampFormat: time.DateTime})
+		logrus.SetOutput(mw)
 	}
 }
 

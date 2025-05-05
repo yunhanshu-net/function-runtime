@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/yunhanshu-net/runcher/pkg/constants"
+	"github.com/yunhanshu-net/runcher/pkg/logger"
 	"os"
 	"os/exec"
 	"strconv"
@@ -14,7 +16,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
-	"github.com/sirupsen/logrus"
 	"github.com/yunhanshu-net/runcher/model"
 	"github.com/yunhanshu-net/runcher/model/request"
 	"github.com/yunhanshu-net/runcher/model/response"
@@ -110,7 +111,7 @@ func (r *cmdRunner) connectNats(conn *nats.Conn) error {
 	}
 	if lock && r.connected {
 		r.connectLock.Unlock()
-		logrus.Infof("未启动连接:%s", r.detail.GetRequestSubject())
+		logger.Infof("未启动连接:%s", r.detail.GetRequestSubject())
 		return nil
 	}
 	if r.status == StatusConnecting {
@@ -148,7 +149,7 @@ func (r *cmdRunner) connectNats(conn *nats.Conn) error {
 	cmd := exec.Command("sh", "-c", cc)
 	err = cmd.Start()
 	if err != nil {
-		logrus.Errorf("命令执行失败: %s", err.Error())
+		logger.Errorf("命令执行失败: %s", err.Error())
 		return fmt.Errorf("启动runner失败: %w", err)
 	}
 	r.process = cmd.Process
@@ -166,7 +167,7 @@ func (r *cmdRunner) connectNats(conn *nats.Conn) error {
 		if msg.Header.Get("code") != "0" {
 			return fmt.Errorf("连接 %+v 失败: %s", runner, msg.Header.Get("msg"))
 		}
-		logrus.Infof("runner: %s 启动成功, 耗时: %s", runner.GetRequestSubject(), time.Since(now))
+		logger.Infof("runner: %s 启动成功, 耗时: %s", runner.GetRequestSubject(), time.Since(now))
 		r.status = StatusRunning
 		r.connected = true
 	}
@@ -191,71 +192,65 @@ func (r *cmdRunner) Close() error {
 	return nil
 }
 
-func (r *cmdRunner) requestByFile(req *request.Request) (*response.Response, error) {
-	logrus.Infof("开始通过文件方式处理请求: route=%s", req.Route)
-	logrus.Debugf("请求内容: %+v", req)
+func (r *cmdRunner) requestByFile(ctx context.Context, req *request.Request) (*response.Response, error) {
+	//logger.Infof("开始通过文件方式处理请求: route=%s", req.Route)
+	//logger.Debugf("请求内容: %+v", req)
 
 	fileName := strconv.Itoa(int(time.Now().UnixMicro())) + ".json"
 	requestJsonPath := r.detail.GetBinPath() + "/.request/" + fileName
 	binPath := r.detail.GetBinPath()
-	reqCall := request.RunnerRequest{Request: req, Runner: r.detail}
+	reqCall := request.RunnerRequest{Request: req.WithContext(ctx), Runner: r.detail}
 
-	logrus.Debugf("准备保存请求文件: path=%s", requestJsonPath)
-	reqJson, _ := json.MarshalIndent(reqCall, "", "  ")
-	logrus.Debugf("请求文件内容: %s", string(reqJson))
+	//logger.Debugf("准备保存请求文件: path=%s", requestJsonPath)
+	//reqJson, _ := json.MarshalIndent(reqCall, "", "  ")
 
 	err := jsonx.SaveFile(requestJsonPath, reqCall)
 	if err != nil {
-		logrus.Errorf("保存请求文件失败: path=%s, error=%v", requestJsonPath, err)
+		logger.Errorf("保存请求文件失败: path=%s, error=%v", requestJsonPath, err)
 		return nil, err
 	}
-	logrus.Debugf("请求文件保存成功: path=%s", requestJsonPath)
+	//logger.Debugf("请求文件保存成功: path=%s", requestJsonPath)
 
 	cc := fmt.Sprintf("cd %s && ./%s %s .request/%s",
 		binPath, r.detail.GetBuildRunnerCurrentVersionName(), req.Route, fileName)
 	// Linux和macOS可以直接使用 && 连接命令
 	cmd := exec.Command("sh", "-c", cc)
-	logrus.Infof("开始执行命令: %s", cc)
+	logger.InfoContextf(ctx, "执行命令: \n%s\n req_body: %+v\n", cc, req.Body)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	err = cmd.Run()
 	if err != nil {
-		logrus.Errorf("命令执行失败: error=%v, command=%s", err, cc)
+		logger.ErrorContextf(ctx, "命令执行失败: error=%v, command=%s", err, cc)
 		return nil, err
 	}
-	logrus.Debugf("命令执行完成，开始处理输出")
 
 	outString := out.String()
 	if outString == "" {
-		logrus.Error("命令输出为空")
+		logger.Error("命令输出为空")
 		return nil, fmt.Errorf("命令输出为空，请检查程序是否正确")
 	}
-	logrus.Debugf("命令输出长度: %d", len(outString))
-	logrus.Debugf("命令原始输出: %s", outString)
 
 	resList := stringsx.ParserHtmlTagContent(outString, "Response")
-	logrus.Debugf("解析到Response标签数量: %d", len(resList))
 
 	if len(resList) == 0 {
-		logrus.Error("未找到Response标签")
+		logger.Error("未找到Response标签")
 		return nil, fmt.Errorf("请使用SDK开发软件，未找到正确的响应格式")
 	}
 
 	var res response.Response
 	err = json.Unmarshal([]byte(resList[0]), &res)
 	if err != nil {
-		logrus.Errorf("解析响应JSON失败: error=%v", err)
+		logger.Errorf("解析响应JSON失败: error=%v", err)
 		return nil, fmt.Errorf("解析响应失败: %w", err)
 	}
 
 	resJson, _ := json.MarshalIndent(res, "", "  ")
-	logrus.Infof("响应内容: %s", string(resJson))
-	logrus.Infof("请求处理完成: route=%s", req.Route)
+	logger.InfoContextf(ctx, "响应内容: %s", string(resJson))
 	return &res, nil
 }
 
-func (r *cmdRunner) requestByNats(runnerRequest *request.Request) (*response.Response, error) {
-	req := &request.RunnerRequest{Request: runnerRequest, Runner: r.detail}
+func (r *cmdRunner) requestByNats(ctx context.Context, runnerRequest *request.Request) (*response.Response, error) {
+	req := &request.RunnerRequest{Request: runnerRequest.WithContext(ctx), Runner: r.detail}
 	var resp response.Response
 	msg := nats.NewMsg(r.detail.GetRequestSubject())
 	msg.Header.Set("body", runnerRequest.BodyString)
@@ -264,6 +259,7 @@ func (r *cmdRunner) requestByNats(runnerRequest *request.Request) (*response.Res
 		return nil, err
 	}
 	msg.Data = marshal
+	msg.Header.Set(constants.TraceID, runnerRequest.TraceID)
 	respMsg, err := r.natsConn.RequestMsg(msg, time.Second*20)
 	if err != nil {
 		return nil, fmt.Errorf("NATS请求失败: %w", err)
@@ -297,18 +293,18 @@ func (r *cmdRunner) Request(ctx context.Context, runnerRequest *request.Request)
 	r.qpsLock.Unlock()
 
 	if !r.connected {
-		one, err := r.requestByFile(runnerRequest)
+		one, err := r.requestByFile(ctx, runnerRequest)
 		if err != nil {
 			return nil, err
 		}
 		return one, nil
 	} else {
 		//长连接
-		rpc, err := r.requestByNats(runnerRequest)
+		rpc, err := r.requestByNats(ctx, runnerRequest)
 		if err != nil {
 			if strings.Contains(err.Error(), "no such file or directory") { //连接失效了
-				logrus.Warnf("NATS连接已失效，尝试使用文件方式请求")
-				return r.requestByFile(runnerRequest)
+				logger.WarnContext(ctx, "NATS连接已失效，尝试使用文件方式请求")
+				return r.requestByFile(ctx, runnerRequest)
 			}
 			return nil, err
 		}

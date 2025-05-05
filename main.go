@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	"github.com/yunhanshu-net/runcher/cmd"
 	"github.com/yunhanshu-net/runcher/pkg/logger"
 	"github.com/yunhanshu-net/runcher/router"
+	"go.uber.org/zap"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,8 +16,11 @@ import (
 )
 
 func main() {
-	//conns.Init()
-	logger.Setup()
+
+	// 初始化日志系统，已在zap.go的init()中完成，这里不需要显式调用
+	// logger.Setup() 是logrus.go中的方法，我们不再需要
+
+	// 初始化应用组件
 	cmd.Init()
 
 	defer cmd.Runcher.Close()
@@ -33,9 +36,9 @@ func main() {
 
 	// 启动HTTP服务
 	go func() {
-		logrus.Info("HTTP服务启动成功，监听端口: 9999")
+		logger.Info("HTTP服务启动成功，监听端口: 9999")
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logrus.Fatalf("HTTP服务启动失败: %s", err)
+			logger.Fatal("HTTP服务启动失败", zap.String("error", err.Error()))
 		}
 	}()
 
@@ -43,14 +46,14 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	logrus.Info("正在关闭服务...")
+	logger.Info("正在关闭服务...")
 
 	// 5秒超时关闭服务
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
-		logrus.Errorf("服务关闭时出错: %s", err)
+		logger.Error("服务关闭时出错", zap.String("error", err.Error()))
 	}
 
-	logrus.Info("服务已安全关闭")
+	logger.Info("服务已安全关闭")
 }

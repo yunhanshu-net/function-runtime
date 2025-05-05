@@ -1,11 +1,14 @@
 package v1
 
 import (
+	"context"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/yunhanshu-net/runcher/cmd"
 	"github.com/yunhanshu-net/runcher/model"
 	"github.com/yunhanshu-net/runcher/model/request"
+	"github.com/yunhanshu-net/runcher/model/response"
+	"github.com/yunhanshu-net/runcher/pkg/constants"
 	"io"
 )
 
@@ -43,10 +46,15 @@ func Runner(c *gin.Context) {
 		req.Request.BodyString = string(b)
 	}
 
-	get, err := cmd.Runcher.Scheduler.Request(&req)
+	traceID := c.GetHeader(constants.HttpTraceID)
+	ctx := context.WithValue(context.Background(), constants.TraceID, traceID)
+	get, err := cmd.Runcher.Scheduler.Request(ctx, &req)
 
 	if err != nil {
-		c.JSON(200, nil)
+		c.JSON(200, response.Body{
+			Code: -1,
+			Msg:  err.Error(),
+		})
 		fmt.Println(err)
 		return
 	}

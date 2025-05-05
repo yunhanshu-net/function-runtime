@@ -1,12 +1,13 @@
 package coder
 
 import (
+	"context"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"github.com/yunhanshu-net/runcher/model"
 	"github.com/yunhanshu-net/runcher/model/dto/coder"
 	"github.com/yunhanshu-net/runcher/pkg/codes"
 	"github.com/yunhanshu-net/runcher/pkg/codex"
+	"github.com/yunhanshu-net/runcher/pkg/logger"
 	"github.com/yunhanshu-net/runcher/pkg/osx"
 	"github.com/yunhanshu-net/runcher/status"
 	"os"
@@ -19,23 +20,23 @@ type Golang struct {
 	runner     *model.Runner
 }
 
-func (g *Golang) AddApi(codeApi *coder.CodeApi) (*coder.AddApiResp, error) {
+func (g *Golang) AddApi(ctx context.Context, codeApi *coder.CodeApi) (*coder.AddApiResp, error) {
 	runner := g.runner
-	pathInfo, err := g.addApi(codeApi)
+	pathInfo, err := g.addApi(ctx, codeApi)
 	if err != nil {
 		return nil, err
 	}
-	err = g.buildRunner(pathInfo.NextVersionPath, runner.GetBuildPath(g.runnerRoot), runner.GetBuildRunnerName())
+	err = g.buildRunner(ctx, pathInfo.NextVersionPath, runner.GetBuildPath(g.runnerRoot), runner.GetBuildRunnerName())
 	if err != nil {
 		return nil, err
 	}
 	return &coder.AddApiResp{Version: runner.GetNextVersion()}, nil
 }
 
-func (g *Golang) createFile(filePath string, content string) error {
+func (g *Golang) createFile(ctx context.Context, filePath string, content string) error {
 	codeFile, err := os.Create(filePath)
 	if err != nil {
-		logrus.Infof("[createFile] Create filePath:%s err: %v", filePath, err)
+		logger.Infof("[createFile] Create filePath:%s err: %v", filePath, err)
 		return err
 	}
 	defer codeFile.Close()
@@ -46,7 +47,7 @@ func (g *Golang) createFile(filePath string, content string) error {
 	return nil
 }
 
-func (g *Golang) buildRunner(workDir string, buildPath string, runnerName string) error {
+func (g *Golang) buildRunner(ctx context.Context, workDir string, buildPath string, runnerName string) error {
 	tidy := exec.Command("go", "mod", "tidy")
 	tidy.Dir = workDir
 	err := tidy.Run()
@@ -71,7 +72,7 @@ func (g *Golang) buildRunner(workDir string, buildPath string, runnerName string
 	return nil
 }
 
-func (g *Golang) AddBizPackage(codeBizPackage *coder.BizPackage) (*coder.BizPackageResp, error) {
+func (g *Golang) AddBizPackage(ctx context.Context, codeBizPackage *coder.BizPackage) (*coder.BizPackageResp, error) {
 	runner := g.runner
 	currentVersionPath := runner.GetInstallPath(g.runnerRoot)
 	_, absPkgPath := codeBizPackage.GetPackageSaveFullPath(currentVersionPath)
@@ -85,7 +86,7 @@ func (g *Golang) AddBizPackage(codeBizPackage *coder.BizPackage) (*coder.BizPack
 	}
 
 	//在pkg下创建_init.go文件
-	err = g.createFile(absPkgPath+"/init_.go", fmt.Sprintf(codes.InitCodeTemplate, codeBizPackage.EnName))
+	err = g.createFile(ctx, absPkgPath+"/init_.go", fmt.Sprintf(codes.InitCodeTemplate, codeBizPackage.EnName))
 	if err != nil {
 		return nil, err
 	}
@@ -103,8 +104,8 @@ func (g *Golang) AddBizPackage(codeBizPackage *coder.BizPackage) (*coder.BizPack
 	return &coder.BizPackageResp{Version: runner.Version}, nil
 }
 
-func (g *Golang) CreateProject() (*coder.CreateProjectResp, error) {
-	logrus.Infof("Create project:%+v", g.runner)
+func (g *Golang) CreateProject(ctx context.Context) (*coder.CreateProjectResp, error) {
+	logger.Infof("Create project:%+v", g.runner)
 	runner := g.runner
 	err := os.MkdirAll(runner.GetToolPath(g.runnerRoot), 0755) //初始化项目目录
 	if err != nil {
@@ -157,7 +158,7 @@ func (g *Golang) CreateProject() (*coder.CreateProjectResp, error) {
 	}
 
 	//创建 go.mod 文件
-	err = g.createFile(codePath+"/go.mod", fmt.Sprintf(`
+	err = g.createFile(ctx, codePath+"/go.mod", fmt.Sprintf(`
 module git.yunhanshu.net/%s/%s
 
 go 1.23`, runner.User, runner.Name))
@@ -170,14 +171,14 @@ go 1.23`, runner.User, runner.Name))
 	if err != nil {
 		return nil, err
 	}
-	err = g.buildRunner(codePath, runner.GetBuildPath(g.runnerRoot), runner.GetBuildRunnerCurrentVersionName())
+	err = g.buildRunner(ctx, codePath, runner.GetBuildPath(g.runnerRoot), runner.GetBuildRunnerCurrentVersionName())
 	if err != nil {
 		return nil, err
 	}
 	return &coder.CreateProjectResp{Version: runner.Version}, nil
 }
 
-func (g *Golang) addApi(api *coder.CodeApi) (*model.RunnerPath, error) {
+func (g *Golang) addApi(ctx context.Context, api *coder.CodeApi) (*model.RunnerPath, error) {
 	runnerRoot := g.runnerRoot
 	runner := g.runner
 	if g.runner.Version == "" {
@@ -213,7 +214,7 @@ func (g *Golang) addApi(api *coder.CodeApi) (*model.RunnerPath, error) {
 		}
 	}
 
-	err := g.createFile(addFileAbsFile, api.Code) //创建新文件
+	err := g.createFile(ctx, addFileAbsFile, api.Code) //创建新文件
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +222,7 @@ func (g *Golang) addApi(api *coder.CodeApi) (*model.RunnerPath, error) {
 	return &pathInfo, nil
 }
 
-func (g *Golang) AddApis(codeApis []*coder.CodeApi) (resp *coder.AddApisResp, err error) {
+func (g *Golang) AddApis(ctx context.Context, codeApis []*coder.CodeApi) (resp *coder.AddApisResp, err error) {
 
 	resp = new(coder.AddApisResp)
 	if len(codeApis) == 0 {
@@ -230,7 +231,7 @@ func (g *Golang) AddApis(codeApis []*coder.CodeApi) (resp *coder.AddApisResp, er
 	var errs []*coder.CodeApiCreateInfo
 	var pathInfo *model.RunnerPath
 	for _, codeApi := range codeApis {
-		info, err := g.addApi(codeApi)
+		info, err := g.addApi(ctx, codeApi)
 		if err != nil {
 			errs = append(errs, &coder.CodeApiCreateInfo{
 				Language:       codeApi.Language,
@@ -252,7 +253,7 @@ func (g *Golang) AddApis(codeApis []*coder.CodeApi) (resp *coder.AddApisResp, er
 	resp.ErrList = errs
 	resp.Version = g.runner.GetNextVersion()
 
-	err = g.buildRunner(pathInfo.NextVersionPath, g.runner.GetBuildPath(g.runnerRoot), g.runner.GetBuildRunnerName())
+	err = g.buildRunner(ctx, pathInfo.NextVersionPath, g.runner.GetBuildPath(g.runnerRoot), g.runner.GetBuildRunnerName())
 	if err != nil {
 		return nil, err
 	}

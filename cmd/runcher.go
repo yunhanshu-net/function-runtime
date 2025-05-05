@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"github.com/yunhanshu-net/runcher/kernel"
-	"github.com/yunhanshu-net/runcher/service/http2nats"
+	"github.com/yunhanshu-net/runcher/pkg/http2nats"
 )
 
 var Runcher *kernel.Runcher
@@ -14,7 +14,7 @@ func Init() {
 		panic(err)
 	}
 
-	http2nats.Setup(Runcher)
+	http2nats.Setup(Runcher.GetNatsConn())
 
 	//Runcher.Run()
 }

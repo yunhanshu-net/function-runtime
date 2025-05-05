@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
-	"github.com/sirupsen/logrus"
 	"github.com/yunhanshu-net/runcher/kernel/scheduler"
+	"github.com/yunhanshu-net/runcher/pkg/logger"
 	"github.com/yunhanshu-net/runcher/pkg/natsx"
+	"go.uber.org/zap"
 	"sync"
 	"time"
 )
@@ -53,7 +54,7 @@ func MustNewRuncher() *Runcher {
 
 // Run 启动Runcher
 func (a *Runcher) Run() error {
-	logrus.Info("启动Runcher...")
+	logger.Info("启动Runcher...")
 
 	// 启动调度器
 	a.wg.Add(1)
@@ -61,7 +62,7 @@ func (a *Runcher) Run() error {
 		defer a.wg.Done()
 		err := a.Scheduler.Run()
 		if err != nil {
-			logrus.Errorf("调度器运行错误: %v", err)
+			logger.Error("调度器运行错误", zap.Error(err))
 			a.cancel() // 出错时取消所有组件
 		}
 	}()
@@ -72,7 +73,7 @@ func (a *Runcher) Run() error {
 	//	defer a.wg.Done()
 	//	err := a.Coder.Run()
 	//	if err != nil {
-	//		logrus.Errorf("编码器运行错误: %v", err)
+	//		logger.Error("编码器运行错误", logger.Error(err))
 	//		a.cancel() // 出错时取消所有组件
 	//	}
 	//}()
@@ -80,17 +81,17 @@ func (a *Runcher) Run() error {
 	// 监控上下文取消
 	go func() {
 		<-a.ctx.Done()
-		logrus.Info("接收到取消信号，准备关闭Runcher...")
+		logger.Info("接收到取消信号，准备关闭Runcher...")
 		close(a.down)
 	}()
 
-	logrus.Info("Runcher启动成功")
+	logger.Info("Runcher启动成功")
 	return nil
 }
 
 // Close 关闭Runcher及其所有组件
 func (a *Runcher) Close() error {
-	logrus.Info("开始关闭Runcher...")
+	logger.Info("开始关闭Runcher...")
 
 	// 发送取消信号
 	a.cancel()
@@ -110,7 +111,7 @@ func (a *Runcher) Close() error {
 	case <-done:
 		// 正常关闭
 	case <-ctx.Done():
-		logrus.Warn("Runcher关闭超时")
+		logger.Warn("Runcher关闭超时")
 	}
 
 	// 关闭组件
@@ -134,7 +135,7 @@ func (a *Runcher) Close() error {
 		a.natsServer.Shutdown()
 	}
 
-	logrus.Info("Runcher已完全关闭")
+	logger.Info("Runcher已完全关闭")
 
 	if len(errs) > 0 {
 		return fmt.Errorf("关闭过程中发生%d个错误: %v", len(errs), errs)

@@ -2,6 +2,7 @@ package response
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 )
 
@@ -14,6 +15,13 @@ type Body struct {
 	Data     interface{}            `json:"data"`
 }
 
+func (b *Body) Err() error {
+	if b.Code == 0 {
+		return nil
+	}
+	return fmt.Errorf(b.Msg)
+}
+
 type BodyWith[T any] struct {
 	DataType string                 `json:"data_type"`
 	TraceID  string                 `json:"trace_id"`
@@ -23,8 +31,19 @@ type BodyWith[T any] struct {
 	Data     T                      `json:"data"`
 }
 
-func (b *Body) DecodeData() {
-
+func (b *Body) DecodeData(data interface{}) error {
+	if data == nil {
+		return fmt.Errorf("data ==nil")
+	}
+	marshal, err := json.Marshal(b.Data)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(marshal, data)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 type Response struct {

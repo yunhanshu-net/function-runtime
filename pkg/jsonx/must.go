@@ -4,6 +4,7 @@ package jsonx
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/yunhanshu-net/runcher/pkg/logger"
 )
 
 // MustJSON ..
@@ -29,6 +30,7 @@ func MustPrintJSON(el interface{}) {
 func JSONString(el interface{}) string {
 	marshal, err := json.Marshal(el)
 	if err != nil {
+		logger.Infof("[JSONString] err:%+v err:%s", el, err.Error())
 		return ""
 	}
 	return string(marshal)

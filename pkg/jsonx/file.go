@@ -3,14 +3,15 @@ package jsonx
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/yunhanshu-net/runcher/pkg/logger"
 	"os"
 	"strings"
 )
 
 func UnmarshalFromFile(filePath string, v interface{}) error {
-	fmt.Println("file path:", filePath)
 	file, err := os.ReadFile(filePath)
 	if err != nil {
+		logger.Errorf("[UnmarshalFromFile] file path:%s err:%s", filePath, err.Error())
 		return err
 	}
 	return json.Unmarshal(file, v)

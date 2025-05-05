@@ -25,7 +25,25 @@ func isVersion(v string) bool {
 		return false
 	}
 	return i >= 0
+}
 
+func addVersion(v string, inc int64) (string, error) {
+	if v == "" {
+		return "", fmt.Errorf("v is empty")
+	}
+	if v[0] != 'v' {
+		return "", fmt.Errorf("v 不符合规范")
+	}
+	s := v[1:]
+	i, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return "", fmt.Errorf("数字部分不符合规范")
+	}
+	r := i + inc
+	if r >= 0 {
+		return fmt.Sprintf("v%v", r), nil
+	}
+	return "", fmt.Errorf("inc 输入错误")
 }
 
 type Runner struct {
@@ -34,6 +52,16 @@ type Runner struct {
 	Name     string `json:"name"`     //应用名称（英文标识）
 	Version  string `json:"version"`  //应用版本
 	User     string `json:"user"`     //所属租户
+}
+
+func (r *Runner) GetOldVersion() (*Runner, error) {
+	version, err := addVersion(r.Version, -1)
+	if err != nil {
+		return nil, err
+	}
+	old := *r
+	old.Version = version
+	return &old, nil
 }
 
 func NewRunner(user string, name string, version ...string) (*Runner, error) {

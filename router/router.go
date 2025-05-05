@@ -3,6 +3,7 @@ package router
 import (
 	"github.com/gin-gonic/gin"
 	v1 "github.com/yunhanshu-net/runcher/api/v1"
+	"github.com/yunhanshu-net/runcher/middleware"
 )
 
 func InitRouter(r *gin.Engine) {
@@ -12,6 +13,7 @@ func InitRouter(r *gin.Engine) {
 	})
 
 	api := r.Group("/api")
+	api.Use(middleware.WithTraceId())
 	api.Any("/runner/:user/:runner/*router", v1.Runner)
 
 	//api.POST("/coder/AddApi", v1.AddApi)
