@@ -77,7 +77,7 @@ func init() {
 		baseDir = filepath.Dir(filepath.Dir(dir))
 	}
 
-	isDev := os.Getenv("ENV") == "dev"
+	//isDev := os.Getenv("ENV") == "dev"
 
 	// 创建基础配置
 	config := zapcore.EncoderConfig{
