@@ -50,6 +50,7 @@ func (g *Golang) createFile(ctx context.Context, filePath string, content string
 }
 
 func (g *Golang) buildRunner(ctx context.Context, workDir string, buildPath string, runnerName string) error {
+	logger.InfoContextf(ctx, "workDir:%s\nbuildPath:%s\n runnerName:%s\n", workDir, buildPath, runnerName)
 	// 1. 检查 workDir 是否是有效的 Go 模块目录
 	if !osx.FileExists(filepath.Join(workDir, "go.mod")) {
 		return fmt.Errorf("workDir %s is not a Go module root", workDir)
@@ -58,6 +59,14 @@ func (g *Golang) buildRunner(ctx context.Context, workDir string, buildPath stri
 	// 2. 确保构建目录存在
 	if err := os.MkdirAll(buildPath, 0755); err != nil {
 		return fmt.Errorf("failed to create build directory: %v", err)
+	}
+
+	version := exec.Command("go", "version")
+	version.Dir = workDir
+	fmt.Println("version:")
+	versionBt, err := version.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("go version: %v\n%s", err, string(versionBt))
 	}
 
 	// 3. 执行 go mod tidy
