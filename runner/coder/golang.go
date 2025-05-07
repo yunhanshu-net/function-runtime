@@ -12,6 +12,7 @@ import (
 	"github.com/yunhanshu-net/runcher/status"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -28,6 +29,7 @@ func (g *Golang) AddApi(ctx context.Context, codeApi *coder.CodeApi) (*coder.Add
 	}
 	err = g.buildRunner(ctx, pathInfo.NextVersionPath, runner.GetBuildPath(g.runnerRoot), runner.GetBuildRunnerName())
 	if err != nil {
+		logger.ErrorContextf(ctx, "程序编译失败：%s", err.Error())
 		return nil, err
 	}
 	return &coder.AddApiResp{Version: runner.GetNextVersion()}, nil
@@ -48,27 +50,43 @@ func (g *Golang) createFile(ctx context.Context, filePath string, content string
 }
 
 func (g *Golang) buildRunner(ctx context.Context, workDir string, buildPath string, runnerName string) error {
+	// 1. 检查 workDir 是否是有效的 Go 模块目录
+	if !osx.FileExists(filepath.Join(workDir, "go.mod")) {
+		return fmt.Errorf("workDir %s is not a Go module root", workDir)
+	}
+
+	// 2. 确保构建目录存在
+	if err := os.MkdirAll(buildPath, 0755); err != nil {
+		return fmt.Errorf("failed to create build directory: %v", err)
+	}
+
+	// 3. 执行 go mod tidy
 	tidy := exec.Command("go", "mod", "tidy")
 	tidy.Dir = workDir
-	err := tidy.Run()
-	if err != nil {
-		return err
+	if output, err := tidy.CombinedOutput(); err != nil {
+		return fmt.Errorf("go mod tidy failed: %v\n%s", err, string(output))
 	}
-	// 创建命令
-	cmd := exec.Command("go", "build", "-o", "../../bin/"+runnerName)
 
-	// 设置工作目录（可选）
-	cmd.Dir = workDir // 当前目录，可以根据需要修改为项目路径
+	// 4. 构建二进制文件
+	outputPath := filepath.Join(buildPath, runnerName)
+	cmd := exec.Command("go", "build", "-o", outputPath)
+	cmd.Dir = workDir
 
-	output, err := cmd.Output()
+	output, err := cmd.CombinedOutput()
+	s := string(output)
 	if err != nil {
-		return fmt.Errorf("build failed: err:%v, output:%s", err, string(output))
+		logger.ErrorContextf(ctx, "Build failed error ：%s output %s", err, s)
+		return fmt.Errorf("build failed: %v\n%s", err, s)
 	}
-	fmt.Println(string(output))
-	exists := osx.FileExists(buildPath + "/" + runnerName)
-	if !exists {
-		return status.ErrorCodeApiBuildError.WithMessage(workDir)
+
+	// 5. 记录构建日志（正常输出）
+	logger.InfoContextf(ctx, "Build output output:%s", s)
+
+	// 6. 验证生成的文件
+	if !osx.FileExists(outputPath) {
+		return status.ErrorCodeApiBuildError.WithMessage(fmt.Sprintf("binary not found at %s", outputPath))
 	}
+
 	return nil
 }
 
@@ -157,14 +175,26 @@ func (g *Golang) CreateProject(ctx context.Context) (*coder.CreateProjectResp, e
 		return nil, err
 	}
 
-	//创建 go.mod 文件
-	err = g.createFile(ctx, codePath+"/go.mod", fmt.Sprintf(`
-module git.yunhanshu.net/%s/%s
+	pkg := fmt.Sprintf("git.yunhanshu.net/%s/%s", runner.User, runner.Name)
 
-go 1.23`, runner.User, runner.Name))
+	//创建 go.mod 文件
+	//	err = g.createFile(ctx, codePath+"/go.mod", fmt.Sprintf(`
+	//module git.yunhanshu.net/%s/%s
+	//
+	//go 1.23`, runner.User, runner.Name))
+	//go mod init
+
+	tidy := exec.Command("go", "mod", "init", pkg)
+	tidy.Dir = codePath
+	err = tidy.Run()
 	if err != nil {
 		return nil, err
 	}
+	exists := osx.FileExists(codePath + "/go.mod")
+	if !exists {
+		return nil, fmt.Errorf("go mod init err:%s", err)
+	}
+
 	//创建main文件
 	manager := codex.NewGolangProjectManager(codePath)
 	err = manager.CreateMain(nil)
