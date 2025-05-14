@@ -109,11 +109,80 @@ func (r *Runner) GetLatestVersion() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return versions[0], nil
+	if len(versions) > 0 {
+		return versions[0], nil
+	}
+	return "v0", nil
+}
+
+func (r *Runner) GetLatestVersionsDebug(count int) ([]string, error) {
+	path := conf.GetRunnerRoot() + "/" + r.User + "/" + r.Name + "/debug"
+
+	// 读取目录内容
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil, fmt.Errorf("目录读取失败：%s", err.Error())
+	}
+
+	var versions []int
+
+	// 构建前缀：user_name_v
+	prefix := r.User + "_" + r.Name + "_v"
+
+	for _, entry := range entries {
+		// 只处理文件，忽略目录
+		if entry.IsDir() {
+			continue
+		}
+
+		name := entry.Name()
+
+		// 检查文件名是否以 user_name_v 开头
+		if !strings.HasPrefix(name, prefix) {
+			continue
+		}
+
+		// 提取版本号部分
+		numStr := name[len(prefix):]
+		if numStr == "" {
+			continue
+		}
+
+		num, err := strconv.Atoi(numStr)
+		if err != nil {
+			continue
+		}
+
+		versions = append(versions, num)
+	}
+
+	// 按版本号从大到小排序
+	sort.Slice(versions, func(i, j int) bool {
+		return versions[i] > versions[j]
+	})
+
+	// 截取指定数量
+	if count < 0 {
+		count = 0
+	}
+	if len(versions) > count {
+		versions = versions[:count]
+	}
+
+	// 转换为字符串形式
+	result := make([]string, len(versions))
+	for i, v := range versions {
+		result[i] = fmt.Sprintf("v%d", v)
+	}
+
+	return result, nil
 }
 
 // GetLatestVersions 返回指定目录下最新的若干个版本目录（如 v0, v1, v2...）
 func (r *Runner) GetLatestVersions(count int) ([]string, error) {
+	if conf.IsDev() {
+		return r.GetLatestVersionsDebug(count)
+	}
 	path := conf.GetRunnerRoot() + "/" + r.User + "/" + r.Name + "/" + "version"
 	// 读取目录内容
 	entries, err := os.ReadDir(path)
@@ -201,11 +270,16 @@ func (r *Runner) GetNextVersion() string {
 }
 
 func (r *Runner) GetInstallPath(rootPath string) string {
-	return fmt.Sprintf("%s/%s/%s/version/%s", strings.TrimSuffix(rootPath, "/"), r.User, r.Name, r.Version)
+	root := strings.TrimSuffix(rootPath, "/")
+	if conf.IsDev() {
+		return fmt.Sprintf("%s/%s/%s/debug", root, r.User, r.Name)
+	}
+	return fmt.Sprintf("%s/%s/%s/version/%s", root, r.User, r.Name, r.Version)
 }
 
 type RunnerPath struct {
 	RootPath              string //根目录
+	RunnerRoot            string
 	CurrentVersionPath    string //当前版本目录
 	NextVersionPath       string //下一个版本目录
 	CurrentVersionBakPath string //当前版本备份目录
@@ -216,6 +290,7 @@ type RunnerPath struct {
 func (r *Runner) GetPaths(rootPath string) RunnerPath {
 	return RunnerPath{
 		RootPath:              rootPath,
+		RunnerRoot:            fmt.Sprintf("%s/%s/%s", rootPath, r.User, r.Name),
 		CurrentVersionPath:    fmt.Sprintf("%s/%s/%s/version/%s", strings.TrimSuffix(rootPath, "/"), r.User, r.Name, r.Version),
 		NextVersionPath:       fmt.Sprintf("%s/%s/%s/version/%s", strings.TrimSuffix(rootPath, "/"), r.User, r.Name, r.GetNextVersion()),
 		CurrentVersionErrPath: fmt.Sprintf("%s/%s/%s/version/%s_err", strings.TrimSuffix(rootPath, "/"), r.User, r.Name, r.Version),

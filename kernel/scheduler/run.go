@@ -2,9 +2,11 @@ package scheduler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/nats-io/nats.go"
 	"github.com/yunhanshu-net/runcher/model"
+	"github.com/yunhanshu-net/runcher/model/request"
 	"github.com/yunhanshu-net/runcher/pkg/constants"
 	"github.com/yunhanshu-net/runcher/pkg/logger"
 	"go.uber.org/zap"
@@ -14,6 +16,62 @@ import (
 )
 
 func (s *Scheduler) Run() error {
+
+	functionSub, err := s.natsConn.Subscribe("function.run.>", func(msg *nats.Msg) {
+
+		logger.Infof("function.run >%s uid:%s", msg.Subject, string(msg.Data))
+		//接收runner关闭
+		req := request.RunnerRequest{
+			Request: &request.Request{
+				Method: msg.Header.Get("method"),
+				Route:  msg.Header.Get("router"),
+				Body:   string(msg.Data),
+			},
+			Runner: &model.Runner{
+				Name:     msg.Header.Get("runner"),
+				User:     msg.Header.Get("user"),
+				Version:  msg.Header.Get("version"),
+				Language: "go",
+			},
+		}
+		ctx := context.WithValue(context.Background(), constants.TraceID, msg.Header.Get(constants.TraceID))
+		//var req request.RunnerRequest
+		rsp := nats.NewMsg(msg.Subject)
+		rsp.Header.Set("code", "0")
+		response, err := s.Request(ctx, &req)
+		if err != nil {
+			rsp.Header.Set("code", "-1")
+			rsp.Header.Set("msg", err.Error())
+			err = msg.RespondMsg(rsp)
+			if err != nil {
+				logger.Error("request error", zap.Error(err))
+				return
+			}
+		}
+		for k, v := range response.MetaData {
+			rsp.Header.Set(k, fmt.Sprintf("%v", v))
+		}
+		switch response.Body.(type) {
+		case string:
+			rsp.Data = []byte(response.Body.(string))
+		default:
+			rsp.Data, err = json.Marshal(response.Body)
+			if err != nil {
+				logger.Error("request error", zap.Error(err))
+			}
+		}
+
+		err = msg.RespondMsg(rsp)
+		if err != nil {
+			logger.Error("request error", zap.Error(err))
+			return
+		}
+		logger.Info("request success", zap.String("uid", msg.Subject))
+	})
+	if err != nil {
+		return err
+	}
+	s.functionSub = functionSub
 
 	//group := uuid.New().String()
 	//监听runner的启动和关闭事件
@@ -37,6 +95,7 @@ func (s *Scheduler) Run() error {
 			return
 		}
 		logger.Infof("runner:%s close success", m.GetRequestSubject())
+		fmt.Printf("runner:%s close success\n", m.GetRequestSubject())
 
 	})
 	if err != nil {

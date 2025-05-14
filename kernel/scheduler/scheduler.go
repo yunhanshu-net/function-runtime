@@ -24,6 +24,7 @@ type Scheduler struct {
 	natsConn       *nats.Conn
 	closeSub       *nats.Subscription
 	coderSub       *nats.Subscription
+	functionSub    *nats.Subscription
 	runtimeRunners map[string]*runtime.Runners
 	runnerLock     *sync.Mutex
 	sockInfoLk     *sync.Mutex
@@ -103,6 +104,7 @@ func (s *Scheduler) Close() error {
 	}
 	s.closeSub.Unsubscribe()
 	s.coderSub.Unsubscribe()
+	s.functionSub.Unsubscribe()
 	return nil
 }
 

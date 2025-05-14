@@ -168,6 +168,7 @@ func (r *cmdRunner) connectNats(conn *nats.Conn) error {
 			return fmt.Errorf("连接 %+v 失败: %s", runner, msg.Header.Get("msg"))
 		}
 		logger.Infof("runner: %s 启动成功, 耗时: %s", runner.GetRequestSubject(), time.Since(now))
+		fmt.Printf("runner: %s 启动成功, 耗时: %s\n", runner.GetRequestSubject(), time.Since(now))
 		r.status = StatusRunning
 		r.connected = true
 	}

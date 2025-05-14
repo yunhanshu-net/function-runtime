@@ -1,6 +1,9 @@
 package coder
 
-import "strings"
+import (
+	"github.com/yunhanshu-net/runcher/conf"
+	"strings"
+)
 
 type CodeApi struct {
 	Language       string `json:"language"`
@@ -25,12 +28,21 @@ type CodeApiCreateInfo struct {
 	Status string `json:"status"`
 }
 
-func (c *CodeApi) GetFileSaveFullPath(sourceCodeDir string) (fullPath string, absFilePath string) {
-	fullPath = strings.TrimSuffix(sourceCodeDir, "/") + "/api/" + strings.Trim(c.AbsPackagePath, "/")
+func (c *CodeApi) GetFileSaveFullPath(sourceCodeDir string, nextVersion string) (fullPath string, absFilePath string) {
+	if conf.IsDev() {
+		fullPath = strings.TrimSuffix(sourceCodeDir, "/") + "/debug" + "/api/" + strings.Trim(c.AbsPackagePath, "/")
+
+	} else {
+		fullPath = strings.TrimSuffix(sourceCodeDir, "/") + "/" + nextVersion + "/api/" + strings.Trim(c.AbsPackagePath, "/")
+
+	}
 	absFilePath = fullPath + "/" + c.GetFileName()
 	return fullPath, absFilePath
 }
 
 func (c *CodeApi) GetFileName() string {
+	if c.Language == "" {
+		c.Language = "go"
+	}
 	return c.EnName + "." + c.Language
 }

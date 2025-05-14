@@ -3,9 +3,9 @@ package coder
 import (
 	"context"
 	"fmt"
+	"github.com/yunhanshu-net/runcher/conf"
 	"github.com/yunhanshu-net/runcher/model"
 	"github.com/yunhanshu-net/runcher/model/dto/coder"
-	"github.com/yunhanshu-net/runcher/pkg/codes"
 	"github.com/yunhanshu-net/runcher/pkg/codex"
 	"github.com/yunhanshu-net/runcher/pkg/logger"
 	"github.com/yunhanshu-net/runcher/pkg/osx"
@@ -17,17 +17,60 @@ import (
 )
 
 type Golang struct {
-	runnerRoot string
-	runner     *model.Runner
+	runnerRoot     string
+	IsDev          bool
+	UseGoMod       bool
+	ImportPathRoot string
+	ModuleRoot     string
+	projectRoot    string
+	runner         *model.Runner
+}
+
+func (g *Golang) GetInitCodeTemplate() string {
+	return `package %s
+
+func Init()  {
+
+}`
+}
+
+func (g *Golang) GetModulePkg() string {
+	return fmt.Sprintf("%s/%s/%s", g.ModuleRoot, g.runner.User, g.runner.Name)
+}
+
+func (g *Golang) getCurrentVersionPath() string {
+	return g.projectRoot
+}
+
+func (g *Golang) buildImportPath(codeBizPackage *coder.BizPackage) string {
+	if g.IsDev {
+		return fmt.Sprintf("%s/%s/%s/debug/api/%s", g.ModuleRoot, g.runner.User, g.runner.Name, codeBizPackage.AbsPackagePath)
+	}
+	return fmt.Sprintf("%s/%s/%s/api/%s", g.ModuleRoot, g.runner.User, g.runner.Name, codeBizPackage.AbsPackagePath)
+}
+
+func NewGoCoder(runner *model.Runner) (*Golang, error) {
+	goCoder := &Golang{
+		runnerRoot:  conf.GetRunnerRoot(),
+		IsDev:       conf.IsDev(),
+		UseGoMod:    !conf.IsDev(),
+		projectRoot: runner.GetInstallPath(conf.GetRunnerRoot()),
+		ModuleRoot:  "github.com/yunhanshu-net/sdk-go/soft",
+		runner:      runner}
+
+	if !goCoder.IsDev {
+		goCoder.ModuleRoot = "git.yunhanshu.net"
+	}
+	return goCoder, nil
 }
 
 func (g *Golang) AddApi(ctx context.Context, codeApi *coder.CodeApi) (*coder.AddApiResp, error) {
 	runner := g.runner
-	pathInfo, err := g.addApi(ctx, codeApi)
+	_, err := g.addApi(ctx, codeApi)
 	if err != nil {
 		return nil, err
 	}
-	err = g.buildRunner(ctx, pathInfo.NextVersionPath, runner.GetBuildPath(g.runnerRoot), runner.GetBuildRunnerName())
+	err = g.buildRunner(ctx, g.projectRoot, runner.GetBuildPath(g.runnerRoot), runner.GetBuildRunnerName())
 	if err != nil {
 		logger.ErrorContextf(ctx, "程序编译失败：%s", err.Error())
 		return nil, err
@@ -52,21 +95,15 @@ func (g *Golang) createFile(ctx context.Context, filePath string, content string
 func (g *Golang) buildRunner(ctx context.Context, workDir string, buildPath string, runnerName string) error {
 	logger.InfoContextf(ctx, "workDir:%s\nbuildPath:%s\n runnerName:%s\n", workDir, buildPath, runnerName)
 	// 1. 检查 workDir 是否是有效的 Go 模块目录
-	if !osx.FileExists(filepath.Join(workDir, "go.mod")) {
-		return fmt.Errorf("workDir %s is not a Go module root", workDir)
+	if !g.IsDev {
+		if !osx.FileExists(filepath.Join(workDir, "go.mod")) {
+			return fmt.Errorf("workDir %s is not a Go module root", workDir)
+		}
 	}
 
 	// 2. 确保构建目录存在
 	if err := os.MkdirAll(buildPath, 0755); err != nil {
 		return fmt.Errorf("failed to create build directory: %v", err)
-	}
-
-	version := exec.Command("go", "version")
-	version.Dir = workDir
-	fmt.Println("version:")
-	versionBt, err := version.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("go version: %v\n%s", err, string(versionBt))
 	}
 
 	// 3. 执行 go mod tidy
@@ -101,7 +138,7 @@ func (g *Golang) buildRunner(ctx context.Context, workDir string, buildPath stri
 
 func (g *Golang) AddBizPackage(ctx context.Context, codeBizPackage *coder.BizPackage) (*coder.BizPackageResp, error) {
 	runner := g.runner
-	currentVersionPath := runner.GetInstallPath(g.runnerRoot)
+	currentVersionPath := g.getCurrentVersionPath()
 	_, absPkgPath := codeBizPackage.GetPackageSaveFullPath(currentVersionPath)
 	if osx.DirExists(absPkgPath) { //先判断Package是否存在
 		return nil, status.ErrorCodeApiFileExist.WithMessage(absPkgPath)
@@ -113,7 +150,7 @@ func (g *Golang) AddBizPackage(ctx context.Context, codeBizPackage *coder.BizPac
 	}
 
 	//在pkg下创建_init.go文件
-	err = g.createFile(ctx, absPkgPath+"/init_.go", fmt.Sprintf(codes.InitCodeTemplate, codeBizPackage.EnName))
+	err = g.createFile(ctx, absPkgPath+"/init_.go", fmt.Sprintf(g.GetInitCodeTemplate(), codeBizPackage.EnName))
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +158,7 @@ func (g *Golang) AddBizPackage(ctx context.Context, codeBizPackage *coder.BizPac
 	err = manager.AddPackages([]codex.PackageInfo{
 		{
 			Alias:      strings.ReplaceAll(codeBizPackage.AbsPackagePath, "/", "_"),
-			ImportPath: fmt.Sprintf("git.yunhanshu.net/%s/%s/api/%s", runner.User, runner.Name, codeBizPackage.AbsPackagePath),
+			ImportPath: g.buildImportPath(codeBizPackage),
 		},
 	})
 	if err != nil {
@@ -134,7 +171,7 @@ func (g *Golang) AddBizPackage(ctx context.Context, codeBizPackage *coder.BizPac
 func (g *Golang) CreateProject(ctx context.Context) (*coder.CreateProjectResp, error) {
 	logger.Infof("Create project:%+v", g.runner)
 	runner := g.runner
-	err := os.MkdirAll(runner.GetToolPath(g.runnerRoot), 0755) //初始化项目目录
+	err := os.MkdirAll(g.projectRoot, 0755) //初始化项目目录
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +190,7 @@ func (g *Golang) CreateProject(ctx context.Context) (*coder.CreateProjectResp, e
 	//  -v2
 	//		-api
 
-	codePath := runner.GetToolPath(g.runnerRoot) + "/version/" + runner.Version
+	codePath := g.getCurrentVersionPath()
 	err = os.MkdirAll(codePath, 0755) //初始版本目录
 	if err != nil {
 		return nil, err
@@ -163,28 +200,28 @@ func (g *Golang) CreateProject(ctx context.Context) (*coder.CreateProjectResp, e
 		return nil, err
 	}
 
-	err = os.MkdirAll(runner.GetToolPath(g.runnerRoot)+"/bin/.request", 0755) //初始化可执行程序目录
+	err = os.MkdirAll(g.projectRoot+"/bin/.request", 0755) //初始化可执行程序目录
 	if err != nil {
 		return nil, err
 	}
-	err = os.MkdirAll(runner.GetToolPath(g.runnerRoot)+"/bin/data", 0755) //初始化数据库目录
+	err = os.MkdirAll(g.projectRoot+"/bin/data", 0755) //初始化数据库目录
 	if err != nil {
 		return nil, err
 	}
-	err = os.MkdirAll(runner.GetToolPath(g.runnerRoot)+"/bin/conf", 0755) //初始化配置文件目录
+	err = os.MkdirAll(g.projectRoot+"/bin/conf", 0755) //初始化配置文件目录
 	if err != nil {
 		return nil, err
 	}
-	err = os.MkdirAll(runner.GetToolPath(g.runnerRoot)+"/bin/logs", 0755) //初始化logs目录
+	err = os.MkdirAll(g.projectRoot+"/bin/logs", 0755) //初始化logs目录
 	if err != nil {
 		return nil, err
 	}
-	err = os.MkdirAll(runner.GetToolPath(g.runnerRoot)+"/bin/api-logs", 0755) //初始化api-logs目录
+	err = os.MkdirAll(g.projectRoot+"/bin/api-logs", 0755) //初始化api-logs目录
 	if err != nil {
 		return nil, err
 	}
 
-	pkg := fmt.Sprintf("git.yunhanshu.net/%s/%s", runner.User, runner.Name)
+	pkg := g.GetModulePkg()
 
 	//创建 go.mod 文件
 	//	err = g.createFile(ctx, codePath+"/go.mod", fmt.Sprintf(`
@@ -193,24 +230,27 @@ func (g *Golang) CreateProject(ctx context.Context) (*coder.CreateProjectResp, e
 	//go 1.23`, runner.User, runner.Name))
 	//go mod init
 
-	tidy := exec.Command("go", "mod", "init", pkg)
-	tidy.Dir = codePath
-	err = tidy.Run()
-	if err != nil {
-		return nil, err
-	}
-	exists := osx.FileExists(codePath + "/go.mod")
-	if !exists {
-		return nil, fmt.Errorf("go mod init err:%s", err)
+	if !g.IsDev {
+		tidy := exec.Command("go", "mod", "init", pkg)
+		tidy.Dir = codePath
+		err = tidy.Run()
+		if err != nil {
+			return nil, err
+		}
+		exists := osx.FileExists(codePath + "/go.mod")
+		if !exists {
+			return nil, fmt.Errorf("go mod init err:%s", err)
+		}
+
 	}
 
 	//创建main文件
-	manager := codex.NewGolangProjectManager(codePath)
-	err = manager.CreateMain(nil)
+	//manager := codex.NewGolangProjectManager(codePath)
+	err = g.CreateMain(nil)
 	if err != nil {
 		return nil, err
 	}
-	err = g.buildRunner(ctx, codePath, runner.GetBuildPath(g.runnerRoot), runner.GetBuildRunnerCurrentVersionName())
+	err = g.buildRunner(ctx, codePath, g.projectRoot, runner.GetBuildRunnerCurrentVersionName())
 	if err != nil {
 		return nil, err
 	}
@@ -218,6 +258,9 @@ func (g *Golang) CreateProject(ctx context.Context) (*coder.CreateProjectResp, e
 }
 
 func (g *Golang) addApi(ctx context.Context, api *coder.CodeApi) (*model.RunnerPath, error) {
+	if conf.IsDev() {
+		return g.debugAddApi(ctx, api)
+	}
 	runnerRoot := g.runnerRoot
 	runner := g.runner
 	if g.runner.Version == "" {
@@ -230,7 +273,7 @@ func (g *Golang) addApi(ctx context.Context, api *coder.CodeApi) (*model.RunnerP
 	pathInfo := runner.GetPaths(runnerRoot)
 	api.Language = g.runner.Language
 
-	_, addFileAbsFile := api.GetFileSaveFullPath(pathInfo.NextVersionPath)
+	_, addFileAbsFile := api.GetFileSaveFullPath(pathInfo.RunnerRoot, g.runner.GetNextVersion())
 	//if osx.DirExists(addFileSavePath) { //先判断package是否存在
 	//	return nil, status.ErrorCodeApiFileExist.WithMessage(addFileSavePath)
 	//}
@@ -261,6 +304,17 @@ func (g *Golang) addApi(ctx context.Context, api *coder.CodeApi) (*model.RunnerP
 	return &pathInfo, nil
 }
 
+func (g *Golang) debugAddApi(ctx context.Context, api *coder.CodeApi) (*model.RunnerPath, error) {
+	pathInfo := g.runner.GetPaths(g.runnerRoot)
+	_, addFileAbsFile := api.GetFileSaveFullPath(pathInfo.RunnerRoot, g.runner.GetNextVersion())
+	err := g.createFile(ctx, addFileAbsFile, api.Code) //创建新文件
+	if err != nil {
+		return nil, err
+	}
+
+	return &pathInfo, nil
+
+}
 func (g *Golang) AddApis(ctx context.Context, codeApis []*coder.CodeApi) (resp *coder.AddApisResp, err error) {
 
 	resp = new(coder.AddApisResp)
@@ -292,7 +346,7 @@ func (g *Golang) AddApis(ctx context.Context, codeApis []*coder.CodeApi) (resp *
 	resp.ErrList = errs
 	resp.Version = g.runner.GetNextVersion()
 
-	err = g.buildRunner(ctx, pathInfo.NextVersionPath, g.runner.GetBuildPath(g.runnerRoot), g.runner.GetBuildRunnerName())
+	err = g.buildRunner(ctx, g.projectRoot, g.runner.GetBuildPath(g.runnerRoot), g.runner.GetBuildRunnerName())
 	if err != nil {
 		return nil, err
 	}

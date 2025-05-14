@@ -2,7 +2,6 @@ package coder
 
 import (
 	"context"
-	"github.com/yunhanshu-net/runcher/conf"
 	"github.com/yunhanshu-net/runcher/model"
 	"github.com/yunhanshu-net/runcher/model/dto/coder"
 )
@@ -15,11 +14,15 @@ type Coder interface {
 }
 
 func NewCoder(runner *model.Runner) (Coder, error) {
+	goCoder, err := NewGoCoder(runner)
+	if err != nil {
+		return nil, err
+	}
 	switch runner.Language {
 	case "go":
-		return &Golang{runnerRoot: conf.GetRunnerRoot(), runner: runner}, nil
+		return goCoder, nil
 	default:
 		runner.Language = "go"
-		return &Golang{runnerRoot: conf.GetRunnerRoot(), runner: runner}, nil
+		return goCoder, nil
 	}
 }
