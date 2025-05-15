@@ -52,6 +52,17 @@ type Runner struct {
 	Name     string `json:"name"`     //应用名称（英文标识）
 	Version  string `json:"version"`  //应用版本
 	User     string `json:"user"`     //所属租户
+
+	//import
+	//calc "github.com/yunhanshu-net/sdk-go/soft/beiluo/oa/prod/api/calc" 这是不用go.mod的效果 prod
+	//calc "github.com/yunhanshu-net/sdk-go/soft/beiluo/oa/debug/api/calc" 这是不用go.mod的效果 debug
+
+	//calc "git.yunhanshu.net/beiluo/oa/api/calc" 这是用了go.mod的效果
+
+	//module
+	//git.yunhanshu.net/beiluo/oa
+
+	root string //
 }
 
 func (r *Runner) GetOldVersion() (*Runner, error) {
@@ -74,6 +85,7 @@ func NewRunner(user string, name string, version ...string) (*Runner, error) {
 	r := Runner{
 		User: user,
 		Name: name,
+		root: conf.GetRunnerRoot(),
 	}
 	v := ""
 	if len(version) > 0 {
