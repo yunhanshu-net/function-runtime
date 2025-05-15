@@ -97,9 +97,9 @@ func (s *Scheduler) Close() error {
 		for _, r := range v.Running {
 			err := r.Close()
 			if err != nil {
-				logger.Errorf("runner:%s close err:%s", unix, err.Error())
+				logger.Errorf(context.Background(), "runner:%s close err:%s", unix, err.Error())
 			}
-			logger.Infof("runner:%s close success", unix)
+			logger.Infof(context.Background(), "runner:%s close success", unix)
 		}
 	}
 	s.closeSub.Unsubscribe()
@@ -165,10 +165,10 @@ func (s *Scheduler) Request(ctx context.Context, request *request.RunnerRequest)
 		lk := rt.StartLock[r.GetID()]
 		lock := lk.TryLock()
 		if lock { //加锁成功！
-			logger.Infof("当前qps：%v尝试启动连接", qps)
-			err := r.Connect(s.natsConn)
+			logger.Infof(ctx, "当前qps：%v尝试启动连接", qps)
+			err := r.Connect(ctx, s.natsConn)
 			if err != nil {
-				logger.Errorf("连接启动失败：%+v err:%s", r.GetInfo(), err)
+				logger.Errorf(ctx, "连接启动失败：%+v err:%s", r.GetInfo(), err)
 				return nil, err
 			}
 			lk.Unlock()

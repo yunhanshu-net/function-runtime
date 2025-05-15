@@ -38,7 +38,7 @@ const (
 
 func (s *Scheduler) UserCallback(r *model.Runner, callReq interface{}, resp interface{}) error {
 
-	logger.Debugf("[UserCallback] /_callback body:%s", jsonx.JSONString(callReq))
+	logger.Debugf(context.Background(), "[UserCallback] /_callback body:%s", jsonx.JSONString(callReq))
 	runnerRequest := &request.Request{
 		Route:  "/_callback",
 		Method: "POST",
@@ -66,10 +66,10 @@ func (s *Scheduler) UserCallback(r *model.Runner, callReq interface{}, resp inte
 	}
 	err = body.DecodeData(resp)
 	if err != nil {
-		logger.Errorf("[UserCallback] /_callback err:%s sys_resp:%+v user_resp:%+v", err.Error(), rsp, resp)
+		logger.Errorf(context.Background(), "[UserCallback] /_callback err:%s sys_resp:%+v user_resp:%+v", err.Error(), rsp, resp)
 		return err
 	}
-	logger.Debugf("[UserCallback] /_callback sys_resp:%+v user_resp:%+v", rsp, resp)
+	logger.Debugf(context.Background(), "[UserCallback] /_callback sys_resp:%+v user_resp:%+v", rsp, resp)
 	return nil
 
 	//if !rsp.OK() {

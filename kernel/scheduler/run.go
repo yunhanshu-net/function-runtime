@@ -18,8 +18,8 @@ import (
 func (s *Scheduler) Run() error {
 
 	functionSub, err := s.natsConn.Subscribe("function.run.>", func(msg *nats.Msg) {
-
-		logger.Infof("function.run >%s uid:%s", msg.Subject, string(msg.Data))
+		ctx := context.WithValue(context.Background(), constants.TraceID, msg.Header.Get(constants.TraceID))
+		logger.Infof(ctx, "function.run >%s uid:%s", msg.Subject, string(msg.Data))
 		//接收runner关闭
 		req := request.RunnerRequest{
 			Request: &request.Request{
@@ -34,7 +34,6 @@ func (s *Scheduler) Run() error {
 				Language: "go",
 			},
 		}
-		ctx := context.WithValue(context.Background(), constants.TraceID, msg.Header.Get(constants.TraceID))
 		//var req request.RunnerRequest
 		rsp := nats.NewMsg(msg.Subject)
 		rsp.Header.Set("code", "0")
@@ -44,7 +43,7 @@ func (s *Scheduler) Run() error {
 			rsp.Header.Set("msg", err.Error())
 			err = msg.RespondMsg(rsp)
 			if err != nil {
-				logger.Error("request error", zap.Error(err))
+				logger.Error(ctx, "request error", err)
 				return
 			}
 		}
@@ -57,16 +56,16 @@ func (s *Scheduler) Run() error {
 		default:
 			rsp.Data, err = json.Marshal(response.Body)
 			if err != nil {
-				logger.Error("request error", zap.Error(err))
+				logger.Error(ctx, "request error", err)
 			}
 		}
 
 		err = msg.RespondMsg(rsp)
 		if err != nil {
-			logger.Error("request error", zap.Error(err))
+			logger.Error(ctx, "request error", err)
 			return
 		}
-		logger.Info("request success", zap.String("uid", msg.Subject))
+		logger.Info(ctx, "request success", zap.String("uid", msg.Subject))
 	})
 	if err != nil {
 		return err
@@ -76,7 +75,9 @@ func (s *Scheduler) Run() error {
 	//group := uuid.New().String()
 	//监听runner的启动和关闭事件
 	subscribe, err := s.natsConn.Subscribe("close.runner", func(msg *nats.Msg) {
-		logger.Infof("runner.close >%s uid:%s", msg.Subject, string(msg.Data))
+		ctx := context.WithValue(context.Background(), constants.TraceID, msg.Header.Get(constants.TraceID))
+
+		logger.Infof(ctx, "runner.close >%s uid:%s", msg.Subject, string(msg.Data))
 		//接收runner关闭
 		var m model.Runner
 		m.Version = msg.Header.Get("version")
@@ -84,17 +85,17 @@ func (s *Scheduler) Run() error {
 		m.Name = msg.Header.Get("name")
 		err := s.stopRunner(&m)
 		if err != nil {
-			logger.Errorf("runner:%s close err:%s", m.GetRequestSubject(), err.Error())
+			logger.Errorf(ctx, "runner:%s close err:%s", m.GetRequestSubject(), err.Error())
 			return
 		}
 		rsp := nats.NewMsg(msg.Subject)
 		rsp.Header.Set("code", "0")
 		err = msg.RespondMsg(rsp)
 		if err != nil {
-			logger.Errorf("runner:%s close err:%s", m.GetRequestSubject(), err.Error())
+			logger.Errorf(ctx, "runner:%s close err:%s", m.GetRequestSubject(), err.Error())
 			return
 		}
-		logger.Infof("runner:%s close success", m.GetRequestSubject())
+		logger.Infof(ctx, "runner:%s close success", m.GetRequestSubject())
 		fmt.Printf("runner:%s close success\n", m.GetRequestSubject())
 
 	})
@@ -104,6 +105,8 @@ func (s *Scheduler) Run() error {
 	s.closeSub = subscribe
 
 	coderSub, err := s.natsConn.Subscribe("coder.>", func(msg *nats.Msg) {
+		ctx := context.WithValue(context.Background(), constants.TraceID, msg.Header.Get(constants.TraceID))
+
 		defer func() {
 			if err := recover(); err != nil {
 				fmt.Println(string(debug.Stack()))
@@ -111,7 +114,6 @@ func (s *Scheduler) Run() error {
 		}()
 		subjects := strings.Split(msg.Subject, ".")
 		subject := subjects[1]
-		ctx := context.WithValue(context.Background(), constants.TraceID, msg.Header.Get(constants.TraceID))
 		if subject == "addApi" {
 			s.AddApiByNats(ctx, msg)
 		}
@@ -140,12 +142,12 @@ func (s *Scheduler) Run() error {
 		for {
 			select {
 			case <-s.ctx.Done():
-				logger.Debug("关闭nats监控")
+				logger.Debug(context.Background(), "关闭nats监控")
 				return
 			case <-time.After(5 * time.Second):
 				// 检查连接状态
 				if s.natsConn.Status() != nats.CONNECTED {
-					logger.Error("NATS连接已断开", zap.String("status", s.natsConn.Status().String()))
+					logger.Infof(context.Background(), "NATS连接已断开")
 				}
 			}
 		}

@@ -72,7 +72,7 @@ func (g *Golang) AddApi(ctx context.Context, codeApi *coder.CodeApi) (*coder.Add
 	}
 	err = g.buildRunner(ctx, g.projectRoot, runner.GetBuildPath(g.runnerRoot), runner.GetBuildRunnerName())
 	if err != nil {
-		logger.ErrorContextf(ctx, "程序编译失败：%s", err.Error())
+		logger.Errorf(ctx, "程序编译失败：%s", err.Error())
 		return nil, err
 	}
 	return &coder.AddApiResp{Version: runner.GetNextVersion()}, nil
@@ -81,7 +81,7 @@ func (g *Golang) AddApi(ctx context.Context, codeApi *coder.CodeApi) (*coder.Add
 func (g *Golang) createFile(ctx context.Context, filePath string, content string) error {
 	codeFile, err := os.Create(filePath)
 	if err != nil {
-		logger.Infof("[createFile] Create filePath:%s err: %v", filePath, err)
+		logger.Infof(ctx, "[createFile] Create filePath:%s err: %v", filePath, err)
 		return err
 	}
 	defer codeFile.Close()
@@ -93,7 +93,7 @@ func (g *Golang) createFile(ctx context.Context, filePath string, content string
 }
 
 func (g *Golang) buildRunner(ctx context.Context, workDir string, buildPath string, runnerName string) error {
-	logger.InfoContextf(ctx, "workDir:%s\nbuildPath:%s\n runnerName:%s\n", workDir, buildPath, runnerName)
+	logger.Infof(ctx, "workDir:%s\nbuildPath:%s\n runnerName:%s\n", workDir, buildPath, runnerName)
 	// 1. 检查 workDir 是否是有效的 Go 模块目录
 	if !g.IsDev {
 		if !osx.FileExists(filepath.Join(workDir, "go.mod")) {
@@ -121,12 +121,12 @@ func (g *Golang) buildRunner(ctx context.Context, workDir string, buildPath stri
 	output, err := cmd.CombinedOutput()
 	s := string(output)
 	if err != nil {
-		logger.ErrorContextf(ctx, "Build failed error ：%s output %s", err, s)
+		logger.Infof(ctx, "Build failed error ：%s output %s", err, s)
 		return fmt.Errorf("build failed: %v\n%s", err, s)
 	}
 
 	// 5. 记录构建日志（正常输出）
-	logger.InfoContextf(ctx, "Build output output:%s", s)
+	logger.Infof(ctx, "Build output output:%s", s)
 
 	// 6. 验证生成的文件
 	if !osx.FileExists(outputPath) {
@@ -169,7 +169,7 @@ func (g *Golang) AddBizPackage(ctx context.Context, codeBizPackage *coder.BizPac
 }
 
 func (g *Golang) CreateProject(ctx context.Context) (*coder.CreateProjectResp, error) {
-	logger.Infof("Create project:%+v", g.runner)
+	logger.Infof(ctx, "Create project:%+v", g.runner)
 	runner := g.runner
 	err := os.MkdirAll(g.projectRoot, 0755) //初始化项目目录
 	if err != nil {

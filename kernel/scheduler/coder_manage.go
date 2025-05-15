@@ -133,7 +133,7 @@ func (s *Scheduler) AddApiByNats(ctx context.Context, msg *nats.Msg) {
 		rspMsg.Data = marshal
 		err2 := msg.RespondMsg(rspMsg)
 		if err2 != nil {
-			logger.ErrorContextf(ctx, "[AddApiByNats] msg.RespondMsg(rspMsg) err:%s err2:%s req:%+v", err.Error(), err2, req)
+			logger.Errorf(ctx, "[AddApiByNats] msg.RespondMsg(rspMsg) err:%s err2:%s req:%+v", err.Error(), err2, req)
 		}
 	}()
 	err = json.Unmarshal(msg.Data, &req)
@@ -172,7 +172,7 @@ func (s *Scheduler) AddApisByNats(ctx context.Context, msg *nats.Msg) {
 		rspMsg.Data = marshal
 		err2 := msg.RespondMsg(rspMsg)
 		if err2 != nil {
-			logger.Errorf("[AddApiByNats] msg.RespondMsg(rspMsg) err:%s err2:%s req:%+v", err.Error(), err2, req)
+			logger.Errorf(ctx, "[AddApiByNats] msg.RespondMsg(rspMsg) err:%s err2:%s req:%+v", err.Error(), err2, req)
 		}
 	}()
 	err = json.Unmarshal(msg.Data, &req)
@@ -224,7 +224,7 @@ func (s *Scheduler) AddBizPackage(ctx context.Context, msg *nats.Msg) {
 		rspMsg.Data = marshal
 		err2 := msg.RespondMsg(rspMsg)
 		if err2 != nil {
-			logger.Errorf("[AddBizPackage] msg.RespondMsg(rspMsg) err:%s err2:%s req:%+v", err.Error(), err2, req)
+			logger.Errorf(ctx, "[AddBizPackage] msg.RespondMsg(rspMsg) err:%s err2:%s req:%+v", err.Error(), err2, req)
 		}
 	}()
 	err = json.Unmarshal(msg.Data, &req)
@@ -248,7 +248,7 @@ func (s *Scheduler) createProject(ctx context.Context, r *coder.CreateProjectReq
 	if err != nil {
 		return nil, err
 	}
-	logger.Infof("[createProject] req:%+v", r)
+	logger.Infof(ctx, "[createProject] req:%+v", r)
 	rsp, err := newRunner.CreateProject(ctx)
 	if err != nil {
 		err = errors.WithMessage(err, "createProject err")
@@ -274,7 +274,7 @@ func (s *Scheduler) CreateProject(ctx context.Context, msg *nats.Msg) {
 		rspMsg.Data = marshal
 		err2 := msg.RespondMsg(rspMsg)
 		if err2 != nil {
-			logger.Errorf("[CreateProject] msg.RespondMsg(rspMsg) err:%s err2:%s req:%+v", err.Error(), err2, req)
+			logger.Errorf(ctx, "[CreateProject] msg.RespondMsg(rspMsg) err:%s err2:%s req:%+v", err.Error(), err2, req)
 		}
 	}()
 	err = json.Unmarshal(msg.Data, &req)

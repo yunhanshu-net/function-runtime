@@ -9,12 +9,10 @@ require (
 	github.com/go-git/go-git/v5 v5.16.0
 	github.com/google/uuid v1.6.0
 	github.com/mholt/archiver/v3 v3.5.1
-	github.com/natefinch/lumberjack v2.0.0+incompatible
 	github.com/nats-io/nats-server/v2 v2.11.1
 	github.com/nats-io/nats.go v1.39.1
 	github.com/pkg/errors v0.9.1
 	github.com/qiniu/api.v7/v7 v7.8.2
-	github.com/sirupsen/logrus v1.9.3
 	go.uber.org/zap v1.27.0
 	golang.org/x/sync v0.13.0
 	golang.org/x/sys v0.32.0
@@ -23,7 +21,6 @@ require (
 
 require (
 	dario.cat/mergo v1.0.0 // indirect
-	github.com/BurntSushi/toml v1.4.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.1.6 // indirect
 	github.com/andybalholm/brotli v1.0.1 // indirect

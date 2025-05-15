@@ -33,7 +33,7 @@ const (
 type Runner interface {
 	coder.Coder
 	IsRunning() bool
-	Connect(conn *nats.Conn) error
+	Connect(ctx context.Context, conn *nats.Conn) error
 	Close() error
 	GetInfo() *model.Runner
 	GetID() string
@@ -98,11 +98,11 @@ func (r *cmdRunner) IsRunning() bool {
 	return r.status == StatusRunning
 }
 
-func (r *cmdRunner) Connect(conn *nats.Conn) error {
-	return r.connectNats(conn)
+func (r *cmdRunner) Connect(ctx context.Context, conn *nats.Conn) error {
+	return r.connectNats(ctx, conn)
 }
 
-func (r *cmdRunner) connectNats(conn *nats.Conn) error {
+func (r *cmdRunner) connectNats(ctx context.Context, conn *nats.Conn) error {
 	now := time.Now()
 
 	lock := r.connectLock.TryLock()
@@ -111,7 +111,7 @@ func (r *cmdRunner) connectNats(conn *nats.Conn) error {
 	}
 	if lock && r.connected {
 		r.connectLock.Unlock()
-		logger.Infof("未启动连接:%s", r.detail.GetRequestSubject())
+		logger.Infof(ctx, "未启动连接:%s", r.detail.GetRequestSubject())
 		return nil
 	}
 	if r.status == StatusConnecting {
@@ -149,7 +149,7 @@ func (r *cmdRunner) connectNats(conn *nats.Conn) error {
 	cmd := exec.Command("sh", "-c", cc)
 	err = cmd.Start()
 	if err != nil {
-		logger.Errorf("命令执行失败: %s", err.Error())
+		logger.Errorf(ctx, "命令执行失败: %s", err.Error())
 		return fmt.Errorf("启动runner失败: %w", err)
 	}
 	r.process = cmd.Process
@@ -167,7 +167,7 @@ func (r *cmdRunner) connectNats(conn *nats.Conn) error {
 		if msg.Header.Get("code") != "0" {
 			return fmt.Errorf("连接 %+v 失败: %s", runner, msg.Header.Get("msg"))
 		}
-		logger.Infof("runner: %s 启动成功, 耗时: %s", runner.GetRequestSubject(), time.Since(now))
+		logger.Infof(ctx, "runner: %s 启动成功, 耗时: %s", runner.GetRequestSubject(), time.Since(now))
 		fmt.Printf("runner: %s 启动成功, 耗时: %s\n", runner.GetRequestSubject(), time.Since(now))
 		r.status = StatusRunning
 		r.connected = true
@@ -207,7 +207,7 @@ func (r *cmdRunner) requestByFile(ctx context.Context, req *request.Request) (*r
 
 	err := jsonx.SaveFile(requestJsonPath, reqCall)
 	if err != nil {
-		logger.Errorf("保存请求文件失败: path=%s, error=%v", requestJsonPath, err)
+		logger.Errorf(ctx, "保存请求文件失败: path=%s, error=%v", requestJsonPath, err)
 		return nil, err
 	}
 	//logger.Debugf("请求文件保存成功: path=%s", requestJsonPath)
@@ -216,37 +216,37 @@ func (r *cmdRunner) requestByFile(ctx context.Context, req *request.Request) (*r
 		binPath, r.detail.GetBuildRunnerCurrentVersionName(), req.Route, fileName)
 	// Linux和macOS可以直接使用 && 连接命令
 	cmd := exec.Command("sh", "-c", cc)
-	logger.InfoContextf(ctx, "执行命令: \n%s\n req_body: %+v\n", cc, req.Body)
+	logger.Infof(ctx, "执行命令: \n%s\n req_body: %+v\n", cc, req.Body)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	err = cmd.Run()
 	if err != nil {
-		logger.ErrorContextf(ctx, "命令执行失败: error=%v, command=%s", err, cc)
+		logger.Infof(ctx, "命令执行失败: error=%v, command=%s", err, cc)
 		return nil, err
 	}
 
 	outString := out.String()
 	if outString == "" {
-		logger.Error("命令输出为空")
+		logger.Errorf(ctx, "命令输出为空")
 		return nil, fmt.Errorf("命令输出为空，请检查程序是否正确")
 	}
 
 	resList := stringsx.ParserHtmlTagContent(outString, "Response")
 
 	if len(resList) == 0 {
-		logger.Error("未找到Response标签")
+		logger.Errorf(ctx, "未找到Response标签")
 		return nil, fmt.Errorf("请使用SDK开发软件，未找到正确的响应格式")
 	}
 
 	var res response.Response
 	err = json.Unmarshal([]byte(resList[0]), &res)
 	if err != nil {
-		logger.Errorf("解析响应JSON失败: error=%v", err)
+		logger.Errorf(ctx, "解析响应JSON失败: error=%v", err)
 		return nil, fmt.Errorf("解析响应失败: %w", err)
 	}
 
 	resJson, _ := json.MarshalIndent(res, "", "  ")
-	logger.InfoContextf(ctx, "响应内容: %s", string(resJson))
+	logger.Infof(ctx, "响应内容: %s", string(resJson))
 	return &res, nil
 }
 
@@ -304,7 +304,7 @@ func (r *cmdRunner) Request(ctx context.Context, runnerRequest *request.Request)
 		rpc, err := r.requestByNats(ctx, runnerRequest)
 		if err != nil {
 			if strings.Contains(err.Error(), "no such file or directory") { //连接失效了
-				logger.WarnContext(ctx, "NATS连接已失效，尝试使用文件方式请求")
+				logger.Warnf(ctx, "NATS连接已失效，尝试使用文件方式请求")
 				return r.requestByFile(ctx, runnerRequest)
 			}
 			return nil, err

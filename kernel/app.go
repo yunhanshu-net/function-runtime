@@ -8,7 +8,6 @@ import (
 	"github.com/yunhanshu-net/runcher/kernel/scheduler"
 	"github.com/yunhanshu-net/runcher/pkg/logger"
 	"github.com/yunhanshu-net/runcher/pkg/natsx"
-	"go.uber.org/zap"
 	"sync"
 	"time"
 )
@@ -34,12 +33,12 @@ func (a *Runcher) GetNatsConn() *nats.Conn {
 // MustNewRuncher 创建一个新的Runcher实例
 // 如果初始化过程中出现任何错误，将会panic
 func MustNewRuncher() *Runcher {
-	natsCli, natsSrv, err := natsx.InitNatsWithRetry(3)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	natsCli, natsSrv, err := natsx.InitNatsWithRetry(ctx, 3)
 	if err != nil {
 		panic(fmt.Sprintf("初始化NATS失败: %v", err))
 	}
-
-	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Runcher{
 		down:       make(chan struct{}, 1),
@@ -54,7 +53,7 @@ func MustNewRuncher() *Runcher {
 
 // Run 启动Runcher
 func (a *Runcher) Run() error {
-	logger.Info("启动Runcher...")
+	logger.Info(context.Background(), "启动Runcher...")
 
 	// 启动调度器
 	a.wg.Add(1)
@@ -62,7 +61,7 @@ func (a *Runcher) Run() error {
 		defer a.wg.Done()
 		err := a.Scheduler.Run()
 		if err != nil {
-			logger.Error("调度器运行错误", zap.Error(err))
+			logger.Error(context.Background(), "调度器运行错误", err)
 			a.cancel() // 出错时取消所有组件
 		}
 	}()
@@ -81,17 +80,17 @@ func (a *Runcher) Run() error {
 	// 监控上下文取消
 	go func() {
 		<-a.ctx.Done()
-		logger.Info("接收到取消信号，准备关闭Runcher...")
+		logger.Info(context.Background(), "接收到取消信号，准备关闭Runcher...")
 		close(a.down)
 	}()
 
-	logger.Info("Runcher启动成功")
+	logger.Info(context.Background(), "Runcher启动成功")
 	return nil
 }
 
 // Close 关闭Runcher及其所有组件
 func (a *Runcher) Close() error {
-	logger.Info("开始关闭Runcher...")
+	logger.Info(context.Background(), "开始关闭Runcher...")
 
 	// 发送取消信号
 	a.cancel()
@@ -111,7 +110,7 @@ func (a *Runcher) Close() error {
 	case <-done:
 		// 正常关闭
 	case <-ctx.Done():
-		logger.Warn("Runcher关闭超时")
+		logger.Warn(context.Background(), "Runcher关闭超时")
 	}
 
 	// 关闭组件
@@ -135,7 +134,7 @@ func (a *Runcher) Close() error {
 		a.natsServer.Shutdown()
 	}
 
-	logger.Info("Runcher已完全关闭")
+	logger.Info(context.Background(), "Runcher已完全关闭")
 
 	if len(errs) > 0 {
 		return fmt.Errorf("关闭过程中发生%d个错误: %v", len(errs), errs)
