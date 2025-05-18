@@ -1,4 +1,4 @@
-package scheduler
+package consts
 
 const (
 	// 页面事件

@@ -1,4 +1,4 @@
-package codex
+package coder
 
 import (
 	"bufio"
@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-// 从文件中提取import信息（排除runner）
-func parseImports(filename string) ([]PackageInfo, error) {
+// ParseImports 从文件中提取import信息（排除runner）
+func ParseImports(filename string) ([]PackageInfo, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, err

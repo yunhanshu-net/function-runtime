@@ -1,6 +1,7 @@
 package osx
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -90,4 +91,31 @@ func DeleteFileOrDir(path string) error {
 
 	// 删除空的父目录
 	return removeEmptyParents(path)
+}
+
+// UpsertFile 判断文件是否存在，不存在则创建并写入内容，存在则覆盖
+func UpsertFile(filename string, content string) error {
+	// 打开文件：O_WRONLY 写模式 | O_CREATE 创建 | O_TRUNC 截断（覆盖）
+	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return fmt.Errorf("无法打开或创建文件: %w", err)
+	}
+	defer file.Close()
+
+	// 写入内容
+	_, err = file.WriteString(content)
+	if err != nil {
+		return fmt.Errorf("写入文件内容失败: %w", err)
+	}
+
+	return nil
+}
+
+// ReadToString 读取文件并返回文本内容
+func ReadToString(filename string) string {
+	file, err := os.ReadFile(filename)
+	if err != nil {
+		return ""
+	}
+	return string(file)
 }

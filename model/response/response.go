@@ -22,15 +22,6 @@ func (b *Body) Err() error {
 	return fmt.Errorf(b.Msg)
 }
 
-type BodyWith[T any] struct {
-	DataType string                 `json:"data_type"`
-	TraceID  string                 `json:"trace_id"`
-	MetaData map[string]interface{} `json:"meta_data"` //sdk 层
-	Code     int                    `json:"code"`
-	Msg      string                 `json:"msg"`
-	Data     T                      `json:"data"`
-}
-
 func (b *Body) DecodeData(data interface{}) error {
 	if data == nil {
 		return fmt.Errorf("data ==nil")

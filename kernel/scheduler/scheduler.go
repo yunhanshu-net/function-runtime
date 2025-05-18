@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"github.com/nats-io/nats.go"
+	"github.com/yunhanshu-net/pkg/dto/runnerproject"
 	"github.com/yunhanshu-net/runcher/conf"
-	"github.com/yunhanshu-net/runcher/model"
-	"github.com/yunhanshu-net/runcher/model/request"
-	"github.com/yunhanshu-net/runcher/model/response"
 	"github.com/yunhanshu-net/runcher/pkg/logger"
 	"github.com/yunhanshu-net/runcher/runner"
 	"github.com/yunhanshu-net/runcher/runtime"
+	"github.com/yunhanshu-net/sdk-go/pkg/dto/request"
+	"github.com/yunhanshu-net/sdk-go/pkg/dto/response"
 	"sync"
 )
 
@@ -59,7 +59,7 @@ func NewScheduler(conn *nats.Conn) *Scheduler {
 	}
 }
 
-func (s *Scheduler) stopRunner(runner *model.Runner) error {
+func (s *Scheduler) stopRunner(runner *runnerproject.Runner) error {
 	s.runnerLock.Lock()
 	defer s.runnerLock.Unlock()
 	subject := runner.GetRequestSubject()
@@ -71,23 +71,6 @@ func (s *Scheduler) stopRunner(runner *model.Runner) error {
 	}
 	return nil
 }
-
-//// Run 运行调度器
-//func (s *Scheduler) Run() error {
-//	// 订阅主题
-//	sub, err := s.natsConn.Subscribe("scheduler.>", func(msg *nats.Msg) {
-//		// 处理消息
-//		// ...
-//	})
-//	if err != nil {
-//		return fmt.Errorf("订阅主题失败: %w", err)
-//	}
-//
-//	// 启动监控协程
-//
-//
-//	return nil
-//}
 
 // Close 关闭调度器
 func (s *Scheduler) Close() error {
@@ -108,7 +91,7 @@ func (s *Scheduler) Close() error {
 	return nil
 }
 
-func (s *Scheduler) getAndSetRunner(r *model.Runner) (*runtime.Runners, error) {
+func (s *Scheduler) getAndSetRunner(r *runnerproject.Runner) (*runtime.Runners, error) {
 	s.runnerLock.Lock()
 	defer s.runnerLock.Unlock()
 	name := r.GetRequestSubject()
@@ -128,7 +111,7 @@ func (s *Scheduler) getAndSetRunner(r *model.Runner) (*runtime.Runners, error) {
 	return runtimeRunner, nil
 }
 
-func (s *Scheduler) getRunner(r *model.Runner) (runner.Runner, error) {
+func (s *Scheduler) getRunner(r *runnerproject.Runner) (runner.Runner, error) {
 	setRunner, err := s.getAndSetRunner(r)
 	if err != nil {
 		return nil, err
@@ -136,15 +119,9 @@ func (s *Scheduler) getRunner(r *model.Runner) (runner.Runner, error) {
 	return setRunner.GetOne(), nil
 }
 
-func (s *Scheduler) Request(ctx context.Context, request *request.RunnerRequest) (*response.Response, error) {
-
-	//假如没带版本
-	if request.Runner.Version == "" {
-		version, err := request.Runner.GetLatestVersion()
-		if err != nil {
-			return nil, err
-		}
-		request.Runner.Version = version
+func (s *Scheduler) Request(ctx context.Context, request *request.RunFunctionReq) (*response.RunFunctionResp, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
 	rt, err := s.getAndSetRunner(request.Runner)
 	if err != nil {
@@ -155,7 +132,7 @@ func (s *Scheduler) Request(ctx context.Context, request *request.RunnerRequest)
 		return nil, errors.New("runner not found")
 	}
 	if r.IsRunning() { //如果有运行中的实例，直接请求
-		return r.Request(ctx, request.Request)
+		return r.Request(ctx, request)
 	}
 	qps := rt.GetCurrentQps()
 	rt.AddQps(1)
@@ -181,7 +158,7 @@ func (s *Scheduler) Request(ctx context.Context, request *request.RunnerRequest)
 		lk.Unlock()
 	}
 
-	runnerResponse, err := r.Request(ctx, request.Request)
+	runnerResponse, err := r.Request(ctx, request)
 	if err != nil {
 		return nil, err
 	}

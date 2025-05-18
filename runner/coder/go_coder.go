@@ -1,0 +1,477 @@
+package coder
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"github.com/google/uuid"
+	"github.com/yunhanshu-net/pkg/dto/runnerproject"
+	"github.com/yunhanshu-net/runcher/conf"
+	"github.com/yunhanshu-net/runcher/model/consts"
+	"github.com/yunhanshu-net/runcher/model/dto/api"
+	"github.com/yunhanshu-net/runcher/model/dto/coder"
+	"github.com/yunhanshu-net/runcher/model/request"
+	"github.com/yunhanshu-net/runcher/model/response"
+	"github.com/yunhanshu-net/runcher/pkg/jsonx"
+	"github.com/yunhanshu-net/runcher/pkg/logger"
+	"github.com/yunhanshu-net/runcher/pkg/osx"
+	"github.com/yunhanshu-net/runcher/pkg/slicesx"
+	"github.com/yunhanshu-net/runcher/pkg/stringsx"
+	"github.com/yunhanshu-net/runcher/status"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"reflect"
+	"text/template"
+)
+
+type GoCoder struct {
+	*runnerproject.Runner
+
+	IsDev    bool
+	UseGoMod bool
+	//CurrentBuildName string //user_name_v1
+	//NextBuildName    string //user_name_v2
+	ModuleRoot   string //github.com/yunhanshu-net/sdk-go prod
+	SaveRoot     string //整个项目的根目录soft/
+	SavePath     string //当前项目的存储位置 /soft/$user/$name
+	CodePath     string //存放目录代码 /soft/$user/$name/code/cmd
+	MainPath     string //执行目录 /soft/$user/$name/code/cmd/app
+	MainFile     string //执行目录 /soft/$user/$name/code/cmd/app/main.go
+	ApiPath      string //执行目录 /soft/$user/$name/code/api
+	BinPath      string //可执行程序存放目录 soft/$user/$name/workplace/bin
+	ReleasesPath string //可执行程序存放目录 soft/$user/$name/workplace/bin/releases
+	MetaDataPath string //元数据存放目录 soft/$user/$name/workplace/metadata
+	ApiLogsPath  string //api日志存放目录 soft/$user/$name/workplace/api-logs
+	RequestPath  string //soft/$user/$name/workplace/bin/.request
+}
+
+func (g *GoCoder) GetNextBuildName() string {
+	nextVersion := g.Runner.GetNextVersion()
+	return fmt.Sprintf("%s_%s_%s", g.Runner.User, g.Runner.Name, nextVersion)
+}
+
+func (g *GoCoder) GetCurrentBuildName() string {
+	return fmt.Sprintf("%s_%s_%s", g.Runner.User, g.Runner.Name, g.Runner.Version)
+}
+
+func NewGoCoderV2(runner *runnerproject.Runner) (*GoCoder, error) {
+	root := conf.GetRunnerRoot()
+	isDev := conf.IsDev()
+	//currentVersion := runner.Version
+	//nextVersion := runner.GetNextVersion()
+	g := &GoCoder{
+		IsDev:    isDev,
+		Runner:   runner,
+		UseGoMod: !isDev,
+		SaveRoot: root,
+		//CurrentBuildName: fmt.Sprintf("%s_%s_%s", runner.User, runner.Name, currentVersion),
+		//NextBuildName:    fmt.Sprintf("%s_%s_%s", runner.User, runner.Name, nextVersion),
+		SavePath:     filepath.Join(root, runner.User, runner.Name),
+		CodePath:     filepath.Join(root, runner.User, runner.Name, "code"),
+		ApiPath:      filepath.Join(root, runner.User, runner.Name, "code", "api"),
+		MainPath:     filepath.Join(root, runner.User, runner.Name, "code", "cmd", "app"),
+		MainFile:     filepath.Join(root, runner.User, runner.Name, "code", "cmd", "app", "main.go"),
+		BinPath:      filepath.Join(root, runner.User, runner.Name, "workplace", "bin"),
+		ReleasesPath: filepath.Join(root, runner.User, runner.Name, "workplace", "bin", "releases"),
+		MetaDataPath: filepath.Join(root, runner.User, runner.Name, "workplace", "metadata"),
+		ApiLogsPath:  filepath.Join(root, runner.User, runner.Name, "workplace", "api-logs"),
+		RequestPath:  filepath.Join(root, runner.User, runner.Name, "workplace", "bin", ".request"),
+	}
+	return g, nil
+}
+func (g *GoCoder) mkdirAll(ctx context.Context) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	err := os.MkdirAll(g.SavePath, 0755) //初始化项目目录
+	err = os.MkdirAll(g.ApiPath, 0755)
+	err = os.MkdirAll(g.RequestPath, 0755)
+	err = os.MkdirAll(g.MainPath, 0755)
+	err = os.MkdirAll(g.ReleasesPath, 0755)
+	err = os.MkdirAll(g.MetaDataPath, 0755)
+	err = os.MkdirAll(g.BinPath, 0755) //初始化项目目录
+	err = os.MkdirAll(g.SavePath+"/workplace/api-logs", 0755)
+	err = os.MkdirAll(g.SavePath+"/workplace/conf", 0755)
+	err = os.MkdirAll(g.SavePath+"/workplace/data", 0755)
+	err = os.MkdirAll(g.SavePath+"/workplace/logs", 0755)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (g *GoCoder) GetApiSavePath(absPath string) string {
+	return filepath.Join(g.ApiPath, absPath)
+}
+
+type UserCallback struct {
+	Method string      `json:"method"`
+	Router string      `json:"router"`
+	Type   string      `json:"type"`
+	Body   interface{} `json:"body"`
+}
+
+func (g *GoCoder) UserCallback(ctx context.Context, userCallback *UserCallback, resp interface{}) error {
+
+	req := request.RunnerRequest{
+		Runner: g.Runner,
+		Request: &request.Request{
+			Method: "POST",
+			Route:  "/_callback",
+			Body:   jsonx.String(userCallback),
+		},
+	}
+	path := filepath.Join(g.RequestPath, uuid.New().String()+".json")
+	err := jsonx.SaveFile(path, req)
+	if err != nil {
+		return err
+	}
+	cc := fmt.Sprintf("callback 命令：cd %s && ./%s _callback %s", g.BinPath, g.GetCurrentBuildName(), path)
+	command := exec.Command("./"+g.GetCurrentBuildName(), "/_callback", path)
+	command.Dir = g.BinPath
+	logger.Infof(ctx, cc)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return err
+	}
+
+	content := stringsx.ParserHtmlTagContent(string(output), "Response")
+	if content == nil || len(content) == 0 {
+		return fmt.Errorf("UserCallback ParserHtmlTagContent failed: %v\n%s", err, string(output))
+	}
+	var res response.Response
+
+	err = json.Unmarshal([]byte(content[0]), &res)
+	if err != nil {
+		return fmt.Errorf("UserCallback Unmarshal failed: %v\n%s", err, string(output))
+	}
+	body, err := res.DecodeBody()
+	if err != nil {
+		return err
+	}
+
+	if body == nil {
+		return fmt.Errorf("UserCallback failed: %v\n%s", err, string(output))
+	}
+	if resp != nil {
+		err = body.DecodeData(resp)
+		if err != nil {
+			return err
+		}
+	}
+
+	if body.Code == 0 {
+		return nil
+	}
+	return fmt.Errorf("getApiInfos failed: %v\n%s", err, string(output))
+
+}
+
+func (g *GoCoder) GetImportPath(addPkgPath string) string {
+	if g.IsDev {
+		return filepath.Join(fmt.Sprintf("github.com/yunhanshu-net/sdk-go/soft/%s/%s/code/api", g.User, g.Name), addPkgPath)
+	}
+	return filepath.Join(fmt.Sprintf("git.yunhanshu.net/%s/%s/api", g.User, g.Name), addPkgPath)
+}
+
+//func (g *GoCoder) getMainFile() string {
+//	return filepath.Join(g.SavePath, "main.go")
+//}
+
+func (g *GoCoder) GenMainGo(packages []PackageInfo) error {
+
+	tmpl, err := template.New("main").Parse(mainTemplate)
+	if err != nil {
+		return err
+	}
+
+	os.RemoveAll(g.MainFile)
+	f, err := os.Create(g.MainFile)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	data := struct {
+		Packages []PackageInfo
+	}{
+		Packages: packages,
+	}
+
+	if err := tmpl.Execute(f, data); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (g *GoCoder) buildProject(ctx context.Context) (version string, err error) {
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+	logger.Infof(ctx, "g:%+v\n", g)
+	if !g.IsDev {
+		if !osx.FileExists(filepath.Join(g.CodePath, "go.mod")) {
+			return "", fmt.Errorf("CodePath %s is not a Go module root", g.CodePath)
+		}
+	}
+	tidy := exec.Command("go", "mod", "tidy")
+	tidy.Dir = g.CodePath
+	if output, err := tidy.CombinedOutput(); err != nil {
+		logger.Errorf(ctx, "buildProject tidy:%+v\n", string(output))
+		return "", fmt.Errorf("go mod tidy failed: %v\n%s", err, string(output))
+	}
+	version = g.GetNextVersion()
+	// 定义可注入变量的结构体
+	type BuildConfig struct {
+		Version string
+		User    string
+		Name    string
+		Root    string
+		Output  string // 输出文件名
+	}
+	buildConfig := BuildConfig{
+		Version: version,
+		User:    g.User,
+		Name:    g.Name,
+		Output:  g.ReleasesPath + "/" + g.GetNextBuildName(),
+	}
+	//outputPath := filepath.Join(g.ReleasesPath, runnerName)
+	//next :=
+	//cmd := exec.Command("go", "build", "-o", next)
+	ldflags := fmt.Sprintf(
+		`-X 'github.com/yunhanshu-net/sdk-go/runner.Version=%s' `+
+			`-X 'github.com/yunhanshu-net/sdk-go/runner.User=%s' `+
+			`-X 'github.com/yunhanshu-net/sdk-go/runner.Name=%s' `+
+			`-X 'github.com/yunhanshu-net/sdk-go/runner.Root=%s'`,
+		buildConfig.Version,
+		buildConfig.User,
+		buildConfig.Name,
+		buildConfig.Root,
+	)
+
+	// 构造命令
+	cmd := exec.Command(
+		"go",
+		"build",
+		"-ldflags",
+		ldflags,
+		"-o",
+		buildConfig.Output,
+	)
+	cmd.Dir = g.MainPath
+	if output, e := cmd.CombinedOutput(); e != nil {
+		logger.Errorf(ctx, "buildProject go:%s\n", string(output))
+		return "", fmt.Errorf("go mod tidy failed: %v\n%s", e, string(output))
+	}
+	//todo git add and commit
+	cmd = exec.Command("ln", "-s", "releases/"+g.GetNextBuildName(), g.GetNextBuildName())
+	cmd.Dir = g.BinPath
+	if output, err := cmd.CombinedOutput(); err != nil {
+		logger.Errorf(ctx, "ln go:%+v\n", string(output))
+		return "", fmt.Errorf("ln failed: %v\n%s", err, string(output))
+	}
+
+	//生成api log
+	cmd = exec.Command("./"+g.GetNextBuildName(), "apis")
+	cmd.Dir = g.BinPath
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("getApiInfos failed: %v\n%s", err, string(output))
+	}
+	content := stringsx.ParserHtmlTagContent(string(output), "Response")
+	if content == nil || len(content) == 0 {
+		return "", fmt.Errorf("getApiInfos failed: %v\n%s", err, string(output))
+	}
+	var res []*api.Info
+
+	err = json.Unmarshal([]byte(content[0]), &res)
+	if err != nil {
+		return "", fmt.Errorf("getApiInfos failed: %v\n%s", err, string(output))
+	}
+
+	logs := api.ApiLogs{
+		Version: version,
+		Apis:    res,
+	}
+	err = jsonx.SaveFile(filepath.Join(g.ApiLogsPath, version+".json"), logs)
+	if err != nil {
+		return "", fmt.Errorf("getApiInfos failed: %v\n%s", err, string(output))
+	}
+	g.Runner.Version = version
+	versionPath := filepath.Join(g.MetaDataPath, "version.txt")
+	err = osx.UpsertFile(versionPath, version)
+	if err != nil {
+		return "", err
+	}
+	return version, nil
+
+}
+
+func (g *GoCoder) CreateProject(ctx context.Context) (*coder.CreateProjectResp, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	logger.Infof(ctx, "Create project:%+v", g.Runner)
+	err := g.mkdirAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = g.GenMainGo(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	version, err := g.buildProject(ctx)
+	if err != nil {
+		logger.Errorf(ctx, "Create project failed %s:%s", err.Error(), g.GetCurrentBuildName())
+		return nil, err
+	}
+	logger.Infof(ctx, "Create project success:%s", g.GetCurrentBuildName())
+
+	return &coder.CreateProjectResp{Version: version}, nil
+}
+
+func (g *GoCoder) AddBizPackage(ctx context.Context, bizPackage *coder.BizPackage) (*coder.BizPackageResp, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	absPkgPath := bizPackage.GetPackageAbsPath(g.ApiPath)
+	if osx.DirExists(absPkgPath) { //先判断Package是否存在
+		return nil, status.ErrorCodeApiFileExist.WithMessage(absPkgPath)
+	}
+	//不存在才可以创建
+	err := os.MkdirAll(absPkgPath, 0755)
+	if err != nil {
+		return nil, err
+	}
+	err = osx.UpsertFile(filepath.Join(absPkgPath, "keep_.go"), fmt.Sprintf("package %s", bizPackage.GetPackageName()))
+	if err != nil {
+		return nil, err
+	}
+
+	//manager := codex.NewGolangProjectManager(g.MainPath)
+
+	packageInfos := []PackageInfo{{ImportPath: g.GetImportPath(bizPackage.AbsPackagePath)}}
+
+	imports, err := ParseImports(g.MainFile)
+	if err != nil {
+		return nil, err
+	}
+	imports = append(imports, packageInfos...)
+	imports = slicesx.Filter(imports, func(t PackageInfo) string {
+		return t.ImportPath
+	})
+
+	err = g.GenMainGo(imports)
+	if err != nil {
+		return nil, err
+	}
+
+	return &coder.BizPackageResp{Version: g.GetNextVersion()}, nil
+}
+
+func (g *GoCoder) addApi(ctx context.Context, api *coder.CodeApi) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	err := osx.UpsertFile(filepath.Join(g.ApiPath, api.AbsPackagePath, api.EnName+".go"), api.Code)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// apiEqual 比较两个API是否相等
+func apiEqual(a, b *api.Info) bool {
+	// 使用reflect.DeepEqual进行深度比较
+	return reflect.DeepEqual(a, b)
+}
+
+func (g *GoCoder) DiffApi(ctx context.Context, old string, new string) (add []*api.Info, del []*api.Info, updated []*api.Info, err error) {
+	if ctx.Err() != nil {
+		return nil, nil, nil, ctx.Err()
+	}
+	newApiInfos := &api.ApiLogs{}
+	oldApiInfos := &api.ApiLogs{}
+	old = filepath.Join(g.ApiLogsPath, old+".json")
+	new = filepath.Join(g.ApiLogsPath, new+".json")
+	err = jsonx.UnmarshalFromFile(old, oldApiInfos)
+	if err != nil {
+		logger.Errorf(ctx, "jsonx.UnmarshalFromFile(old, oldApiInfos) version:%s error: %v", old, err)
+		err = nil
+	}
+	err = jsonx.UnmarshalFromFile(new, newApiInfos)
+	if err != nil {
+		return
+	}
+	// 创建旧API的映射，用于快速查找
+	lastApiMap := make(map[string]*api.Info)
+	for _, lastApi := range oldApiInfos.Apis {
+		key := fmt.Sprintf("%s:%s", lastApi.Method, lastApi.Router)
+		lastApiMap[key] = lastApi
+	}
+
+	// 遍历当前API，查找新增和更新的API
+	for _, currentApi := range newApiInfos.Apis {
+		key := fmt.Sprintf("%s:%s", currentApi.Method, currentApi.Router)
+		// 检查API是否在上一版本中存在
+		if lastApi, exists := lastApiMap[key]; exists {
+			// 检查API是否有更新
+			if !apiEqual(currentApi, lastApi) {
+				updated = append(updated, currentApi)
+			}
+			// 标记已处理过的API
+			delete(lastApiMap, key)
+		} else {
+			// 新增的API
+			add = append(add, currentApi)
+		}
+	}
+	// 剩余未处理的旧API即为已删除的API
+	for _, api := range lastApiMap {
+		del = append(del, api)
+	}
+	return
+}
+
+func (g *GoCoder) AddApis(ctx context.Context, codeApis []*coder.CodeApi) (resp *coder.AddApisResp, err error) {
+	resp = new(coder.AddApisResp)
+	for _, codeApi := range codeApis {
+		err = g.addApi(ctx, codeApi)
+		if err != nil {
+			return nil, err
+		}
+	}
+	oldVersion := g.Version
+	newVersion, err := g.buildProject(ctx)
+	if err != nil {
+		return nil, err
+	}
+	add, del, updated, err := g.DiffApi(ctx, oldVersion, newVersion)
+	if err != nil {
+		return nil, err
+	}
+	resp.Version = newVersion
+	resp.ApiChangeInfo = &coder.ApiChangeInfo{
+		CurrentVersion: newVersion,
+		AddApi:         add,
+		DelApi:         del,
+		UpdateApi:      updated,
+	}
+	//此时需要回调
+	for _, info := range resp.ApiChangeInfo.AddApi {
+		err = g.UserCallback(ctx, &UserCallback{
+			Method: info.Method,
+			Router: info.Router,
+			Type:   consts.CallbackTypeOnApiCreated,
+		}, nil)
+		if err != nil {
+			logger.Errorf(ctx, "userCallback error:%s method:%s router:%s", err, info.Method, info.Router)
+		} else {
+			logger.Infof(ctx, "userCallback success:%s method:%s", info.Router, info.Method)
+		}
+	}
+
+	return resp, nil
+}

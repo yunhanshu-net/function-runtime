@@ -52,8 +52,8 @@ func InitNatsWithRetry(ctx context.Context, maxRetries int) (*nats.Conn, *server
 			nats.ErrorHandler(func(conn *nats.Conn, subscription *nats.Subscription, err error) {
 				logger.Error(ctx, "NATS错误", err)
 			}),
-			nats.DisconnectHandler(func(conn *nats.Conn) {
-				logger.Warn(ctx, "NATS连接断开")
+			nats.DisconnectErrHandler(func(conn *nats.Conn, err error) {
+				logger.Errorf(ctx, "NATS err:,%v", err)
 			}),
 			nats.ReconnectHandler(func(conn *nats.Conn) {
 				logger.Info(ctx, "NATS已重新连接")

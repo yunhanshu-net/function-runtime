@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/nats-io/nats.go"
-	"github.com/yunhanshu-net/runcher/model"
-	"github.com/yunhanshu-net/runcher/model/request"
+	"github.com/yunhanshu-net/pkg/dto/runnerproject"
+	"github.com/yunhanshu-net/runcher/conf"
 	"github.com/yunhanshu-net/runcher/pkg/constants"
 	"github.com/yunhanshu-net/runcher/pkg/logger"
-	"go.uber.org/zap"
+	"github.com/yunhanshu-net/sdk-go/pkg/dto/request"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -19,22 +19,26 @@ func (s *Scheduler) Run() error {
 
 	functionSub, err := s.natsConn.Subscribe("function.run.>", func(msg *nats.Msg) {
 		ctx := context.WithValue(context.Background(), constants.TraceID, msg.Header.Get(constants.TraceID))
-		logger.Infof(ctx, "function.run >%s uid:%s", msg.Subject, string(msg.Data))
+		//logger.Infof(ctx, "function.run >%s uid:%s", msg.Subject, string(msg.Data))
 		//接收runner关闭
-		req := request.RunnerRequest{
-			Request: &request.Request{
-				Method: msg.Header.Get("method"),
-				Route:  msg.Header.Get("router"),
-				Body:   string(msg.Data),
-			},
-			Runner: &model.Runner{
-				Name:     msg.Header.Get("runner"),
-				User:     msg.Header.Get("user"),
-				Version:  msg.Header.Get("version"),
-				Language: "go",
-			},
+		runner, err := runnerproject.NewRunner(msg.Header.Get("user"), msg.Header.Get("runner"), conf.GetRunnerRoot(), msg.Header.Get("version"))
+		if err != nil {
+			panic(err)
 		}
-		//var req request.RunnerRequest
+
+		req := request.RunFunctionReq{
+			Method:  msg.Header.Get("method"),
+			Router:  msg.Header.Get("router"),
+			TraceID: msg.Header.Get(constants.TraceID),
+			Runner:  runner,
+			//BodyType: "string",
+		}
+		if req.IsMethodGet() {
+			req.UrlQuery = msg.Header.Get("url_query")
+		} else {
+			req.Body = string(msg.Data)
+			req.BodyType = "string"
+		}
 		rsp := nats.NewMsg(msg.Subject)
 		rsp.Header.Set("code", "0")
 		response, err := s.Request(ctx, &req)
@@ -44,28 +48,34 @@ func (s *Scheduler) Run() error {
 			err = msg.RespondMsg(rsp)
 			if err != nil {
 				logger.Error(ctx, "request error", err)
-				return
 			}
+			return
 		}
 		for k, v := range response.MetaData {
 			rsp.Header.Set(k, fmt.Sprintf("%v", v))
 		}
-		switch response.Body.(type) {
-		case string:
-			rsp.Data = []byte(response.Body.(string))
-		default:
-			rsp.Data, err = json.Marshal(response.Body)
-			if err != nil {
-				logger.Error(ctx, "request error", err)
-			}
+		marshal, err := json.Marshal(response)
+		if err != nil {
+			logger.Error(ctx, "response marshal error", err)
+			panic(err)
 		}
+		rsp.Data = marshal
+		//switch response.Body.(type) {
+		//case string:
+		//	rsp.Data = []byte(response.Body.(string))
+		//default:
+		//	rsp.Data, err = json.Marshal(response.Body)
+		//	if err != nil {
+		//		logger.Error(ctx, "request error", err)
+		//	}
+		//}
 
 		err = msg.RespondMsg(rsp)
 		if err != nil {
 			logger.Error(ctx, "request error", err)
 			return
 		}
-		logger.Info(ctx, "request success", zap.String("uid", msg.Subject))
+		//logger.Info(ctx, "request success", zap.String("uid", msg.Subject))
 	})
 	if err != nil {
 		return err
@@ -79,25 +89,24 @@ func (s *Scheduler) Run() error {
 
 		logger.Infof(ctx, "runner.close >%s uid:%s", msg.Subject, string(msg.Data))
 		//接收runner关闭
-		var m model.Runner
-		m.Version = msg.Header.Get("version")
-		m.User = msg.Header.Get("user")
-		m.Name = msg.Header.Get("name")
-		err := s.stopRunner(&m)
+		rn, err := runnerproject.NewRunner(msg.Header.Get("user"), msg.Header.Get("name"), conf.GetRunnerRoot(), msg.Header.Get("version"))
 		if err != nil {
-			logger.Errorf(ctx, "runner:%s close err:%s", m.GetRequestSubject(), err.Error())
+			//todo 错误处理
+			panic(err)
+		}
+		err = s.stopRunner(rn)
+		if err != nil {
+			logger.Errorf(ctx, "runner:%s close err:%s", rn.GetRequestSubject(), err.Error())
 			return
 		}
 		rsp := nats.NewMsg(msg.Subject)
 		rsp.Header.Set("code", "0")
 		err = msg.RespondMsg(rsp)
 		if err != nil {
-			logger.Errorf(ctx, "runner:%s close err:%s", m.GetRequestSubject(), err.Error())
+			logger.Errorf(ctx, "runner:%s close err:%s", rn.GetRequestSubject(), err.Error())
 			return
 		}
-		logger.Infof(ctx, "runner:%s close success", m.GetRequestSubject())
-		fmt.Printf("runner:%s close success\n", m.GetRequestSubject())
-
+		logger.Infof(ctx, "runner:%s close success", rn.GetRequestSubject())
 	})
 	if err != nil {
 		return err
@@ -114,12 +123,12 @@ func (s *Scheduler) Run() error {
 		}()
 		subjects := strings.Split(msg.Subject, ".")
 		subject := subjects[1]
-		if subject == "addApi" {
-			s.AddApiByNats(ctx, msg)
-		}
+		//if subject == "addApi" {
+		//	s.AddApiByNats(ctx, msg)
+		//}
 
 		if subject == "addApis" {
-			s.AddApiByNats(ctx, msg)
+			s.AddApisByNats(ctx, msg)
 		}
 
 		if subject == "createProject" {

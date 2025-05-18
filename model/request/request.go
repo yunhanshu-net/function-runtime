@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/yunhanshu-net/runcher/model"
+	"github.com/yunhanshu-net/pkg/dto/runnerproject"
 	"github.com/yunhanshu-net/runcher/pkg/constants"
 )
 
@@ -27,25 +27,14 @@ func (r *Request) WithContext(ctx context.Context) *Request {
 	return r
 }
 
-type Ping struct {
-}
-type Runner struct {
-	Command         string `json:"command"`
-	WorkPath        string `json:"work_path"`
-	Name            string `json:"name"`
-	User            string `json:"user"`
-	Version         string `json:"version"`
-	RequestJsonPath string `json:"request_json_path"`
-}
 type RunnerRequest struct {
-	UUID            string                 `json:"uuid"`
-	Timeout         int                    `json:"timeout"`
-	Runner          *model.Runner          `json:"runner"`
-	TransportConfig *TransportConfig       `json:"transport_config"`
-	Metadata        map[string]interface{} `json:"metadata"`
-	//Request         *Request               `json:"request"`
-	Request *Request    `json:"request"`
-	Body    interface{} `json:"body"`
+	UUID string `json:"uuid"`
+
+	Runner          *runnerproject.Runner `json:"runner"`
+	TransportConfig *TransportConfig      `json:"transport_config"`
+
+	Request *Request `json:"request"`
+	//Body    interface{} `json:"body"`
 }
 
 type TransportConfig struct {

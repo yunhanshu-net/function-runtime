@@ -4,29 +4,29 @@ import (
 	"context"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/yunhanshu-net/pkg/dto/runnerproject"
 	"github.com/yunhanshu-net/runcher/cmd"
-	"github.com/yunhanshu-net/runcher/model"
-	"github.com/yunhanshu-net/runcher/model/request"
+	"github.com/yunhanshu-net/runcher/conf"
 	"github.com/yunhanshu-net/runcher/model/response"
 	"github.com/yunhanshu-net/runcher/pkg/constants"
+	"github.com/yunhanshu-net/sdk-go/pkg/dto/request"
 	"io"
 )
 
 func Runner(c *gin.Context) {
-
-	req := request.RunnerRequest{
-		Request: &request.Request{
-			Method: c.Request.Method,
-			Route:  c.Param("router"),
-		},
-		Runner: &model.Runner{
-			Name:     c.Param("runner"),
-			User:     c.Param("user"),
-			Language: "go",
-		},
+	traceID := c.GetHeader(constants.HttpTraceID)
+	runner, err := runnerproject.NewRunner(c.Param("user"), c.Param("runner"), conf.GetRunnerRoot())
+	if err != nil {
+		panic(err)
+	}
+	req := request.RunFunctionReq{
+		TraceID: traceID,
+		Method:  c.Request.Method,
+		Router:  c.Param("router"),
+		Runner:  runner,
 	}
 	if c.Request.Method == "GET" {
-		req.Request.Body = c.Request.URL.RawQuery
+		req.UrlQuery = c.Request.URL.RawQuery
 	}
 
 	if c.Request.Method == "POST" {
@@ -42,26 +42,22 @@ func Runner(c *gin.Context) {
 		//	panic(err)
 		//}
 		fmt.Println(string(b))
-		req.Request.Body = string(b)
-		req.Request.BodyString = string(b)
+		req.Body = string(b)
+		req.BodyType = "string"
 	}
 
-	traceID := c.GetHeader(constants.HttpTraceID)
 	ctx := context.WithValue(context.Background(), constants.TraceID, traceID)
 	get, err := cmd.Runcher.Scheduler.Request(ctx, &req)
 
 	if err != nil {
-		c.JSON(200, response.Body{
-			Code: -1,
-			Msg:  err.Error(),
-		})
+		c.JSON(200, response.Body{Code: -1, Msg: err.Error()})
 		fmt.Println(err)
 		return
 	}
-	if v, ok := get.Body.(string); ok {
-		c.Data(200, "application/json; charset=utf-8", []byte(v))
-		return
-	}
+	//if v, ok := get.Body.(string); ok {
+	//	c.Data(200, "application/json; charset=utf-8", []byte(v))
+	//	return
+	//}
 	fmt.Println("get", get)
-	c.JSON(200, get.Body)
+	c.JSON(200, get)
 }
