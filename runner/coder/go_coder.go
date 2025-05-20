@@ -5,23 +5,26 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/yunhanshu-net/pkg/constants"
+	usercallConst "github.com/yunhanshu-net/pkg/constants/usercall"
 	"github.com/yunhanshu-net/pkg/dto/runnerproject"
+	"github.com/yunhanshu-net/pkg/x/cmdx"
+	"github.com/yunhanshu-net/pkg/x/jsonx"
+	"github.com/yunhanshu-net/pkg/x/osx"
+	"github.com/yunhanshu-net/pkg/x/slicesx"
+	"github.com/yunhanshu-net/pkg/x/stringsx"
 	"github.com/yunhanshu-net/runcher/conf"
-	"github.com/yunhanshu-net/runcher/model/consts"
-	"github.com/yunhanshu-net/runcher/model/dto/api"
 	"github.com/yunhanshu-net/runcher/model/dto/coder"
-	"github.com/yunhanshu-net/runcher/model/request"
-	"github.com/yunhanshu-net/runcher/model/response"
-	"github.com/yunhanshu-net/runcher/pkg/jsonx"
 	"github.com/yunhanshu-net/runcher/pkg/logger"
-	"github.com/yunhanshu-net/runcher/pkg/osx"
-	"github.com/yunhanshu-net/runcher/pkg/slicesx"
-	"github.com/yunhanshu-net/runcher/pkg/stringsx"
 	"github.com/yunhanshu-net/runcher/status"
+	"github.com/yunhanshu-net/sdk-go/pkg/dto/api"
+	"github.com/yunhanshu-net/sdk-go/pkg/dto/response"
+	"github.com/yunhanshu-net/sdk-go/pkg/dto/usercall"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"text/template"
 )
 
@@ -58,15 +61,11 @@ func (g *GoCoder) GetCurrentBuildName() string {
 func NewGoCoderV2(runner *runnerproject.Runner) (*GoCoder, error) {
 	root := conf.GetRunnerRoot()
 	isDev := conf.IsDev()
-	//currentVersion := runner.Version
-	//nextVersion := runner.GetNextVersion()
 	g := &GoCoder{
-		IsDev:    isDev,
-		Runner:   runner,
-		UseGoMod: !isDev,
-		SaveRoot: root,
-		//CurrentBuildName: fmt.Sprintf("%s_%s_%s", runner.User, runner.Name, currentVersion),
-		//NextBuildName:    fmt.Sprintf("%s_%s_%s", runner.User, runner.Name, nextVersion),
+		IsDev:        isDev,
+		Runner:       runner,
+		UseGoMod:     !isDev,
+		SaveRoot:     root,
 		SavePath:     filepath.Join(root, runner.User, runner.Name),
 		CodePath:     filepath.Join(root, runner.User, runner.Name, "code"),
 		ApiPath:      filepath.Join(root, runner.User, runner.Name, "code", "api"),
@@ -112,59 +111,46 @@ type UserCallback struct {
 	Body   interface{} `json:"body"`
 }
 
-func (g *GoCoder) UserCallback(ctx context.Context, userCallback *UserCallback, resp interface{}) error {
-
-	req := request.RunnerRequest{
-		Runner: g.Runner,
-		Request: &request.Request{
-			Method: "POST",
-			Route:  "/_callback",
-			Body:   jsonx.String(userCallback),
-		},
+func (g *GoCoder) UserCall(ctx context.Context, req *usercall.Request) (resp *usercall.Response, err error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
-	path := filepath.Join(g.RequestPath, uuid.New().String()+".json")
-	err := jsonx.SaveFile(path, req)
-	if err != nil {
-		return err
-	}
-	cc := fmt.Sprintf("callback 命令：cd %s && ./%s _callback %s", g.BinPath, g.GetCurrentBuildName(), path)
-	command := exec.Command("./"+g.GetCurrentBuildName(), "/_callback", path)
-	command.Dir = g.BinPath
-	logger.Infof(ctx, cc)
-	output, err := command.CombinedOutput()
-	if err != nil {
-		return err
+	args := []string{
+		g.Runner.GetBinPath() + "/" + g.Runner.GetBuildRunnerCurrentVersionName(),
+		"usercall",
+		"--method", req.Method,
+		"--router", req.Router,
+		"--type", req.Type,
+		"--trace_id", ctx.Value(constants.TraceID).(string),
 	}
 
-	content := stringsx.ParserHtmlTagContent(string(output), "Response")
-	if content == nil || len(content) == 0 {
-		return fmt.Errorf("UserCallback ParserHtmlTagContent failed: %v\n%s", err, string(output))
-	}
-	var res response.Response
-
-	err = json.Unmarshal([]byte(content[0]), &res)
-	if err != nil {
-		return fmt.Errorf("UserCallback Unmarshal failed: %v\n%s", err, string(output))
-	}
-	body, err := res.DecodeBody()
-	if err != nil {
-		return err
-	}
-
-	if body == nil {
-		return fmt.Errorf("UserCallback failed: %v\n%s", err, string(output))
-	}
-	if resp != nil {
-		err = body.DecodeData(resp)
+	if req.Body == nil {
+		args = append(args, "--file", "noBody")
+	} else {
+		err := jsonx.SaveFile(filepath.Join(g.Runner.GetRequestPath(), uuid.New().String()+".json"), req)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-
-	if body.Code == 0 {
-		return nil
+	run, cmd, err := cmdx.Run(ctx, g.Runner.GetBinPath(), args)
+	if err != nil {
+		logger.Errorf(ctx, "exec err:%s: cmd:%s", string(run), strings.Join(args, " "))
+		return nil, err
 	}
-	return fmt.Errorf("getApiInfos failed: %v\n%s", err, string(output))
+	content := stringsx.ParserHtmlTagContent(string(run), "Response")
+	if len(content) == 0 {
+		return nil, fmt.Errorf(string(run))
+	}
+	defer cmd.Process.Kill()
+	var res response.RunFunctionRespWithData[*usercall.Response]
+	err = json.Unmarshal([]byte(content[0]), &res)
+	if err != nil {
+		return nil, err
+	}
+	if res.Code == 0 {
+		return res.Data, nil
+	}
+	return nil, fmt.Errorf(res.Msg)
 
 }
 
@@ -174,10 +160,6 @@ func (g *GoCoder) GetImportPath(addPkgPath string) string {
 	}
 	return filepath.Join(fmt.Sprintf("git.yunhanshu.net/%s/%s/api", g.User, g.Name), addPkgPath)
 }
-
-//func (g *GoCoder) getMainFile() string {
-//	return filepath.Join(g.SavePath, "main.go")
-//}
 
 func (g *GoCoder) GenMainGo(packages []PackageInfo) error {
 
@@ -209,7 +191,6 @@ func (g *GoCoder) buildProject(ctx context.Context) (version string, err error) 
 	if ctx.Err() != nil {
 		return "", ctx.Err()
 	}
-	logger.Infof(ctx, "g:%+v\n", g)
 	if !g.IsDev {
 		if !osx.FileExists(filepath.Join(g.CodePath, "go.mod")) {
 			return "", fmt.Errorf("CodePath %s is not a Go module root", g.CodePath)
@@ -218,6 +199,7 @@ func (g *GoCoder) buildProject(ctx context.Context) (version string, err error) 
 	tidy := exec.Command("go", "mod", "tidy")
 	tidy.Dir = g.CodePath
 	if output, err := tidy.CombinedOutput(); err != nil {
+		logger.Errorf(ctx, "g:%+v\n", g)
 		logger.Errorf(ctx, "buildProject tidy:%+v\n", string(output))
 		return "", fmt.Errorf("go mod tidy failed: %v\n%s", err, string(output))
 	}
@@ -236,14 +218,11 @@ func (g *GoCoder) buildProject(ctx context.Context) (version string, err error) 
 		Name:    g.Name,
 		Output:  g.ReleasesPath + "/" + g.GetNextBuildName(),
 	}
-	//outputPath := filepath.Join(g.ReleasesPath, runnerName)
-	//next :=
-	//cmd := exec.Command("go", "build", "-o", next)
 	ldflags := fmt.Sprintf(
-		`-X 'github.com/yunhanshu-net/sdk-go/runner.Version=%s' `+
-			`-X 'github.com/yunhanshu-net/sdk-go/runner.User=%s' `+
-			`-X 'github.com/yunhanshu-net/sdk-go/runner.Name=%s' `+
-			`-X 'github.com/yunhanshu-net/sdk-go/runner.Root=%s'`,
+		`-X 'github.com/yunhanshu-net/sdk-go/env.Version=%s' `+
+			`-X 'github.com/yunhanshu-net/sdk-go/env.User=%s' `+
+			`-X 'github.com/yunhanshu-net/sdk-go/env.Name=%s' `+
+			`-X 'github.com/yunhanshu-net/sdk-go/env.Root=%s'`,
 		buildConfig.Version,
 		buildConfig.User,
 		buildConfig.Name,
@@ -436,6 +415,9 @@ func (g *GoCoder) DiffApi(ctx context.Context, old string, new string) (add []*a
 }
 
 func (g *GoCoder) AddApis(ctx context.Context, codeApis []*coder.CodeApi) (resp *coder.AddApisResp, err error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	resp = new(coder.AddApisResp)
 	for _, codeApi := range codeApis {
 		err = g.addApi(ctx, codeApi)
@@ -461,16 +443,20 @@ func (g *GoCoder) AddApis(ctx context.Context, codeApis []*coder.CodeApi) (resp 
 	}
 	//此时需要回调
 	for _, info := range resp.ApiChangeInfo.AddApi {
-		err = g.UserCallback(ctx, &UserCallback{
-			Method: info.Method,
-			Router: info.Router,
-			Type:   consts.CallbackTypeOnApiCreated,
-		}, nil)
-		if err != nil {
-			logger.Errorf(ctx, "userCallback error:%s method:%s router:%s", err, info.Method, info.Router)
-		} else {
-			logger.Infof(ctx, "userCallback success:%s method:%s", info.Router, info.Method)
+		if !slicesx.ContainsString(info.Callbacks, usercallConst.UserCallTypeOnApiCreated) {
+			logger.Infof(ctx, "api no callback:%s ", usercallConst.UserCallTypeOnApiCreated)
+			continue
 		}
+		var req usercall.Request
+		req.Method = info.Method
+		req.Router = info.Router
+		req.Type = usercallConst.UserCallTypeOnApiCreated
+		call, err1 := g.UserCall(ctx, &req)
+		if err1 != nil {
+			logger.Errorf(ctx, "GoCoder.UserCall(%+v) err: %v", req, err1)
+			continue
+		}
+		logger.Infof(ctx, "GoCoder.UserCall(%+v): success resp:%v", req, call)
 	}
 
 	return resp, nil

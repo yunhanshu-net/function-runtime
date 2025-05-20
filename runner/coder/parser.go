@@ -2,7 +2,7 @@ package coder
 
 import (
 	"bufio"
-	"github.com/yunhanshu-net/runcher/pkg/slicesx"
+	"github.com/yunhanshu-net/pkg/x/slicesx"
 	"os"
 	"regexp"
 	"strings"

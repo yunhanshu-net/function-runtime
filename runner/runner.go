@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/yunhanshu-net/pkg/constants"
 	"github.com/yunhanshu-net/pkg/dto/runnerproject"
 	"github.com/yunhanshu-net/pkg/x/cmdx"
-	"github.com/yunhanshu-net/runcher/pkg/constants"
 	"github.com/yunhanshu-net/runcher/pkg/logger"
 	"os"
 	"path/filepath"
@@ -17,8 +17,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
-	"github.com/yunhanshu-net/runcher/pkg/jsonx"
-	"github.com/yunhanshu-net/runcher/pkg/stringsx"
+	"github.com/yunhanshu-net/pkg/x/jsonx"
+	"github.com/yunhanshu-net/pkg/x/stringsx"
 	"github.com/yunhanshu-net/runcher/runner/coder"
 	"github.com/yunhanshu-net/sdk-go/pkg/dto/request"
 	"github.com/yunhanshu-net/sdk-go/pkg/dto/response"
@@ -102,6 +102,9 @@ func (r *cmdRunner) Connect(ctx context.Context, conn *nats.Conn) error {
 }
 
 func (r *cmdRunner) connectNats(ctx context.Context, conn *nats.Conn) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	now := time.Now()
 
 	lock := r.connectLock.TryLock()
@@ -129,21 +132,6 @@ func (r *cmdRunner) connectNats(ctx context.Context, conn *nats.Conn) error {
 	defer r.connectLock.Unlock()
 
 	runner := r.detail
-
-	//req := request.RunFunctionReq{
-	//	Runner: runner,
-	//UUID:            r.id,
-	//TransportConfig: &request.TransportConfig{IdleTime: 10},
-	//Request:         nil,
-	//}
-
-	//path := runner.GetRequestPath() + "/" + uuid.New().String() + ".json"
-	//err = jsonx.SaveFile(path, req)
-	//if err != nil {
-	//	return fmt.Errorf("保存请求文件失败: %w", err)
-	//}
-
-	//cc := fmt.Sprintf("cd %s && ./%s _connect %s", runner.GetBinPath(), runner.GetBuildRunnerCurrentVersionName(), path)
 	// Linux和macOS可以直接使用 && 连接命令
 	args := []string{
 		"./" + runner.GetBuildRunnerCurrentVersionName(),
@@ -161,15 +149,18 @@ func (r *cmdRunner) connectNats(ctx context.Context, conn *nats.Conn) error {
 		r.process = cmd.Process
 	}()
 
-	//cmd := exec.Command("sh", "-c", cc)
-	//err = cmd.Start()
-	//if err != nil {
-	//	logger.Errorf(ctx, "命令执行失败: %s", err.Error())
-	//	return fmt.Errorf("启动runner失败: %w", err)
-	//}
-
 	select {
+	case <-ctx.Done():
+		r.status = StatusClosed
+		if r.process != nil {
+			r.process.Kill()
+		}
+		return ctx.Err()
 	case <-time.After(time.Second * 5):
+		r.status = StatusClosed
+		if r.process != nil {
+			r.process.Kill()
+		}
 		return fmt.Errorf("连接 %+v 超时", runner)
 	case msg := <-connectMsgCh:
 		newMsg := nats.NewMsg(msg.Subject)
@@ -182,7 +173,6 @@ func (r *cmdRunner) connectNats(ctx context.Context, conn *nats.Conn) error {
 			return fmt.Errorf("连接 %+v 失败: %s", runner, msg.Header.Get("msg"))
 		}
 		logger.Infof(ctx, "runner: %s 启动成功, 耗时: %s", runner.GetRequestSubject(), time.Since(now))
-		fmt.Printf("runner: %s 启动成功, 耗时: %s\n", runner.GetRequestSubject(), time.Since(now))
 		r.status = StatusRunning
 		r.connected = true
 	}
@@ -208,50 +198,19 @@ func (r *cmdRunner) Close() error {
 }
 
 func (r *cmdRunner) requestByFile(ctx context.Context, req *request.RunFunctionReq) (*response.RunFunctionResp, error) {
-	//logger.Infof("开始通过文件方式处理请求: route=%s", req.Route)
-	//logger.Debugf("请求内容: %+v", req)
-
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	fileName := strconv.Itoa(int(time.Now().UnixMicro())) + ".json"
 	requestJsonPath := r.detail.GetBinPath() + "/.request/" + fileName
-	//binPath := r.detail.GetBinPath()
 	binPath := r.detail.GetBinPath()
-	//reqCall := request.RunnerRequest{Request: req.WithContext(ctx), Runner: r.detail}
-	//req:=&request.RunFunctionReq{
-	//	RunnerID: r.id,
-	//	Runner: r.detail,
-	//
-	//}
 	req.RunnerID = r.id
 	req.Runner = r.detail
-
-	//logger.Debugf("准备保存请求文件: path=%s", requestJsonPath)
-	//reqJson, _ := json.MarshalIndent(reqCall, "", "  ")
-
 	err := jsonx.SaveFile(requestJsonPath, req)
 	if err != nil {
 		logger.Errorf(ctx, "保存请求文件失败: path=%s, error=%v", requestJsonPath, err)
 		return nil, err
 	}
-	//logger.Debugf("请求文件保存成功: path=%s", requestJsonPath)
-
-	//cc := fmt.Sprintf("cd %s && ./%s %s .request/%s",
-	//	binPath, r.detail.GetBuildRunnerCurrentVersionName(), req.Router, fileName)
-	//// Linux和macOS可以直接使用 && 连接命令
-	//cmd := exec.Command("sh", "-c", cc)
-	//logger.Infof(ctx, "执行命令: \n%s\n req_body: %+v\n", cc, req.Body)
-	//var out bytes.Buffer
-	//cmd.Stdout = &out
-	//err = cmd.Run()
-	//if err != nil {
-	//	logger.Infof(ctx, "命令执行失败: error=%v, command=%s", err, cc)
-	//	return nil, err
-	//}
-	//
-	//outString := out.String()
-	//if outString == "" {
-	//	logger.Errorf(ctx, "命令输出为空")
-	//	return nil, fmt.Errorf("命令输出为空，请检查程序是否正确")
-	//}
 	args := []string{
 		filepath.Join(binPath, r.detail.GetBuildRunnerCurrentVersionName()),
 		"run",
@@ -279,81 +238,21 @@ func (r *cmdRunner) requestByFile(ctx context.Context, req *request.RunFunctionR
 		logger.Errorf(ctx, "未找到Response标签")
 		return nil, fmt.Errorf("请使用SDK开发软件，未找到正确的响应格式")
 	}
-
 	var res response.RunFunctionResp
 	err = json.Unmarshal([]byte(resList[0]), &res)
 	if err != nil {
 		logger.Errorf(ctx, "解析响应JSON失败: error=%v", err)
 		return nil, fmt.Errorf("解析响应失败: %w", err)
 	}
-
-	//resJson, _ := json.MarshalIndent(res, "", "  ")
-	//logger.Infof(ctx, "响应内容: %s", string(resJson))
 	return &res, nil
 }
 
-//func (r *cmdRunner) requestByFileV2(ctx context.Context, req *request.) (*response.Response, error) {
-//	//logger.Infof("开始通过文件方式处理请求: route=%s", req.Route)
-//	//logger.Debugf("请求内容: %+v", req)
-//
-//	fileName := strconv.Itoa(int(time.Now().UnixMicro())) + ".json"
-//	requestJsonPath := r.detail.GetBinPath() + "/.request/" + fileName
-//	binPath := r.detail.GetBinPath()
-//	reqCall := request.RunnerRequest{Request: req.WithContext(ctx), Runner: r.detail}
-//
-//	//logger.Debugf("准备保存请求文件: path=%s", requestJsonPath)
-//	//reqJson, _ := json.MarshalIndent(reqCall, "", "  ")
-//
-//	err := jsonx.SaveFile(requestJsonPath, reqCall)
-//	if err != nil {
-//		logger.Errorf(ctx, "保存请求文件失败: path=%s, error=%v", requestJsonPath, err)
-//		return nil, err
-//	}
-//	//logger.Debugf("请求文件保存成功: path=%s", requestJsonPath)
-//
-//	cc := fmt.Sprintf("cd %s && ./%s %s .request/%s",
-//		binPath, r.detail.GetBuildRunnerCurrentVersionName(), req.Route, fileName)
-//	// Linux和macOS可以直接使用 && 连接命令
-//	cmd := exec.Command("sh", "-c", cc)
-//	logger.Infof(ctx, "执行命令: \n%s\n req_body: %+v\n", cc, req.Body)
-//	var out bytes.Buffer
-//	cmd.Stdout = &out
-//	err = cmd.Run()
-//	if err != nil {
-//		logger.Infof(ctx, "命令执行失败: error=%v, command=%s", err, cc)
-//		return nil, err
-//	}
-//
-//	outString := out.String()
-//	if outString == "" {
-//		logger.Errorf(ctx, "命令输出为空")
-//		return nil, fmt.Errorf("命令输出为空，请检查程序是否正确")
-//	}
-//
-//	resList := stringsx.ParserHtmlTagContent(outString, "Response")
-//
-//	if len(resList) == 0 {
-//		logger.Errorf(ctx, "未找到Response标签")
-//		return nil, fmt.Errorf("请使用SDK开发软件，未找到正确的响应格式")
-//	}
-//
-//	var res response.Response
-//	err = json.Unmarshal([]byte(resList[0]), &res)
-//	if err != nil {
-//		logger.Errorf(ctx, "解析响应JSON失败: error=%v", err)
-//		return nil, fmt.Errorf("解析响应失败: %w", err)
-//	}
-//
-//	resJson, _ := json.MarshalIndent(res, "", "  ")
-//	logger.Infof(ctx, "响应内容: %s", string(resJson))
-//	return &res, nil
-//}
-
 func (r *cmdRunner) requestByNats(ctx context.Context, runnerRequest *request.RunFunctionReq) (*response.RunFunctionResp, error) {
-	//req := &request.RunFunctionReq{Runner: r.detail}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	var resp response.RunFunctionResp
 	msg := nats.NewMsg(r.detail.GetRequestSubject())
-	//msg.Header.Set("body", runnerRequest.BodyString)
 	runnerRequest.Runner = r.detail
 	marshal, err := json.Marshal(runnerRequest)
 	if err != nil {
