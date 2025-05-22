@@ -252,39 +252,64 @@ func (g *GoCoder) buildProject(ctx context.Context) (version string, err error) 
 	}
 
 	//生成api log
-	cmd = exec.Command("./"+g.GetNextBuildName(), "apis")
+	err = g.refreshApiLogs(ctx)
+	if err != nil {
+		return "", err
+	}
+	err = g.refreshVersion(ctx)
+	if err != nil {
+		return "", err
+	}
+	return version, nil
+
+}
+
+func (g *GoCoder) refreshApiLogs(ctx context.Context) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	version := g.GetNextVersion()
+	//生成api log
+	cmd := exec.Command("./"+g.GetNextBuildName(), "apis")
 	cmd.Dir = g.BinPath
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("getApiInfos failed: %v\n%s", err, string(output))
+		return fmt.Errorf("getApiInfos failed: %v\n%s", err, string(output))
 	}
 	content := stringsx.ParserHtmlTagContent(string(output), "Response")
 	if content == nil || len(content) == 0 {
-		return "", fmt.Errorf("getApiInfos failed: %v\n%s", err, string(output))
+		return fmt.Errorf("getApiInfos failed: %v\n%s", err, string(output))
 	}
 	var res []*api.Info
 
 	err = json.Unmarshal([]byte(content[0]), &res)
 	if err != nil {
-		return "", fmt.Errorf("getApiInfos failed: %v\n%s", err, string(output))
+		return fmt.Errorf("getApiInfos failed: %v\n%s", err, string(output))
 	}
 
 	logs := api.ApiLogs{
 		Version: version,
 		Apis:    res,
 	}
-	err = jsonx.SaveFile(filepath.Join(g.ApiLogsPath, version+".json"), logs)
-	if err != nil {
-		return "", fmt.Errorf("getApiInfos failed: %v\n%s", err, string(output))
-	}
-	g.Runner.Version = version
-	versionPath := filepath.Join(g.MetaDataPath, "version.txt")
-	err = osx.UpsertFile(versionPath, version)
-	if err != nil {
-		return "", err
-	}
-	return version, nil
 
+	err = jsonx.SaveFile(filepath.Join(g.ApiLogsPath, g.GetNextVersion()+".json"), logs)
+	if err != nil {
+		return fmt.Errorf("getApiInfos failed: %v\n%s", err, string(output))
+	}
+	return nil
+}
+func (g *GoCoder) refreshVersion(ctx context.Context) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	g.Runner.Version = g.GetNextVersion()
+	versionPath := filepath.Join(g.MetaDataPath, "version.txt")
+	err := osx.UpsertFile(versionPath, g.Runner.Version)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (g *GoCoder) CreateProject(ctx context.Context) (*coder.CreateProjectResp, error) {
@@ -301,14 +326,18 @@ func (g *GoCoder) CreateProject(ctx context.Context) (*coder.CreateProjectResp, 
 		return nil, err
 	}
 
-	version, err := g.buildProject(ctx)
+	//version, err := g.buildProject(ctx)
+	//if err != nil {
+	//	logger.Errorf(ctx, "Create project failed %s:%s", err.Error(), g.GetCurrentBuildName())
+	//	return nil, err
+	//}
+	err = g.refreshVersion(ctx)
 	if err != nil {
-		logger.Errorf(ctx, "Create project failed %s:%s", err.Error(), g.GetCurrentBuildName())
 		return nil, err
 	}
 	logger.Infof(ctx, "Create project success:%s", g.GetCurrentBuildName())
 
-	return &coder.CreateProjectResp{Version: version}, nil
+	return &coder.CreateProjectResp{Version: g.GetNextVersion()}, nil
 }
 
 func (g *GoCoder) AddBizPackage(ctx context.Context, bizPackage *coder.BizPackage) (*coder.BizPackageResp, error) {
