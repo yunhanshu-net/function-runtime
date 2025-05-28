@@ -8,8 +8,8 @@ import (
 	"github.com/yunhanshu-net/pkg/dto/runnerproject"
 	"github.com/yunhanshu-net/runcher/cmd"
 	"github.com/yunhanshu-net/runcher/conf"
-	"github.com/yunhanshu-net/runcher/model/response"
 	"github.com/yunhanshu-net/sdk-go/pkg/dto/request"
+	"github.com/yunhanshu-net/sdk-go/pkg/dto/response"
 	"io"
 )
 
@@ -50,7 +50,7 @@ func Runner(c *gin.Context) {
 	get, err := cmd.Runcher.Scheduler.Request(ctx, &req)
 
 	if err != nil {
-		c.JSON(200, response.Body{Code: -1, Msg: err.Error()})
+		c.JSON(200, response.RunFunctionResp{Code: -1, Msg: err.Error()})
 		fmt.Println(err)
 		return
 	}

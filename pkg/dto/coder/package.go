@@ -1,8 +1,8 @@
 package coder
 
 import (
+	"fmt"
 	"github.com/yunhanshu-net/pkg/dto/runnerproject"
-	"github.com/yunhanshu-net/runcher/model/dto/syscallback"
 	"github.com/yunhanshu-net/sdk-go/pkg/dto/api"
 	"path/filepath"
 	"strings"
@@ -44,18 +44,41 @@ type ApiChangeInfo struct {
 	DelApi         []*api.Info `json:"del_api"`         //此次删除的api
 	UpdateApi      []*api.Info `json:"update_api"`      //此次变更的api
 }
+
+func (a *ApiChangeInfo) GetAddApisDesc() string {
+	add := ""
+	for _, v := range a.AddApi {
+		add += fmt.Sprintf("%s:(%s)\n", v.ChineseName, v.Router)
+	}
+	return add
+}
+func (a *ApiChangeInfo) GetDelApisDesc() string {
+	add := ""
+	for _, v := range a.DelApi {
+		add += fmt.Sprintf("%s(%s)\n", v.ChineseName, v.Router)
+	}
+	return add
+}
+func (a *ApiChangeInfo) GetUpdateApisDesc() string {
+	add := ""
+	for _, v := range a.DelApi {
+		add += fmt.Sprintf("%s(%s)\n", v.ChineseName, v.Router)
+	}
+	return add
+}
+
+func (a *ApiChangeInfo) GetChangeLog() string {
+	return fmt.Sprintf("新增API:%s\n删除API:%s\n变更API:%s", a.GetAddApisDesc(), a.GetDelApisDesc(), a.GetUpdateApisDesc())
+}
+
 type AddApisResp struct {
+	Hash          string               `json:"hash"`
 	Version       string               `json:"version"`
 	ErrList       []*CodeApiCreateInfo `json:"err_list"`
 	ApiChangeInfo *ApiChangeInfo       `json:"api_change_info"`
 }
 
-type AddApiResp struct {
-	Version              string                              `json:"version"`
-	Data                 interface{}                         `json:"data"`
-	SyscallChangeVersion *syscallback.SysOnVersionChangeResp `json:"syscall_change_version"`
-}
-
 type BizPackageResp struct {
 	Version string `json:"version"`
+	Hash    string `json:"hash"`
 }

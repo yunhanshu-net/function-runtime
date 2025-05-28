@@ -10,6 +10,7 @@ type AddApiReq struct {
 }
 
 type AddApisReq struct {
-	Runner   *runnerproject.Runner
-	CodeApis []*CodeApi
+	Runner   *runnerproject.Runner `json:"runner"`
+	CodeApis []*CodeApi            `json:"code_apis"`
+	Msg      string                `json:"msg"`
 }

@@ -3,12 +3,12 @@ package coder
 import (
 	"context"
 	"github.com/yunhanshu-net/pkg/dto/runnerproject"
-	"github.com/yunhanshu-net/runcher/model/dto/coder"
+	"github.com/yunhanshu-net/runcher/pkg/dto/coder"
 )
 
 type Coder interface {
 	AddBizPackage(ctx context.Context, codeBizPackage *coder.BizPackage) (*coder.BizPackageResp, error)
-	AddApis(ctx context.Context, codeApis []*coder.CodeApi) (resp *coder.AddApisResp, err error)
+	AddApis(ctx context.Context, codeApis *coder.AddApisReq) (resp *coder.AddApisResp, err error)
 	CreateProject(ctx context.Context) (*coder.CreateProjectResp, error)
 }
 

@@ -14,7 +14,7 @@ import (
 	"github.com/yunhanshu-net/pkg/x/slicesx"
 	"github.com/yunhanshu-net/pkg/x/stringsx"
 	"github.com/yunhanshu-net/runcher/conf"
-	"github.com/yunhanshu-net/runcher/model/dto/coder"
+	"github.com/yunhanshu-net/runcher/pkg/dto/coder"
 	"github.com/yunhanshu-net/runcher/pkg/logger"
 	"github.com/yunhanshu-net/runcher/status"
 	"github.com/yunhanshu-net/sdk-go/pkg/dto/api"
@@ -79,6 +79,11 @@ func NewGoCoderV2(runner *runnerproject.Runner) (*GoCoder, error) {
 	}
 	return g, nil
 }
+
+func (g *GoCoder) name() {
+
+}
+
 func (g *GoCoder) mkdirAll(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -298,6 +303,7 @@ func (g *GoCoder) refreshApiLogs(ctx context.Context) error {
 	}
 	return nil
 }
+
 func (g *GoCoder) refreshVersion(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -312,11 +318,25 @@ func (g *GoCoder) refreshVersion(ctx context.Context) error {
 	return nil
 }
 
+func (g *GoCoder) rollbackVersion(ctx context.Context, version string) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	g.Runner.Version = g.GetNextVersion()
+	versionPath := filepath.Join(g.MetaDataPath, "version.txt")
+	err := osx.UpsertFile(versionPath, version)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (g *GoCoder) CreateProject(ctx context.Context) (*coder.CreateProjectResp, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	logger.Infof(ctx, "Create project:%+v", g.Runner)
+	logger.Infof(ctx, "CreateNode project:%+v", g.Runner)
 	err := g.mkdirAll(ctx)
 	if err != nil {
 		return nil, err
@@ -325,19 +345,25 @@ func (g *GoCoder) CreateProject(ctx context.Context) (*coder.CreateProjectResp, 
 	if err != nil {
 		return nil, err
 	}
-
-	//version, err := g.buildProject(ctx)
-	//if err != nil {
-	//	logger.Errorf(ctx, "Create project failed %s:%s", err.Error(), g.GetCurrentBuildName())
-	//	return nil, err
-	//}
 	err = g.refreshVersion(ctx)
 	if err != nil {
 		return nil, err
 	}
-	logger.Infof(ctx, "Create project success:%s", g.GetCurrentBuildName())
-
-	return &coder.CreateProjectResp{Version: g.GetNextVersion()}, nil
+	logger.Infof(ctx, "CreateNode project success:%s", g.GetCurrentBuildName())
+	git, err := InitGit(g)
+	if err != nil {
+		return nil, err
+	}
+	err = git.AddAll()
+	if err != nil {
+		return nil, err
+	}
+	msg := GitCommitMsg{Version: "v0", Msg: "create project"}
+	_, err = git.CommitAll(msg.JSON())
+	if err != nil {
+		return nil, err
+	}
+	return &coder.CreateProjectResp{Version: msg.Version}, nil
 }
 
 func (g *GoCoder) AddBizPackage(ctx context.Context, bizPackage *coder.BizPackage) (*coder.BizPackageResp, error) {
@@ -358,8 +384,6 @@ func (g *GoCoder) AddBizPackage(ctx context.Context, bizPackage *coder.BizPackag
 		return nil, err
 	}
 
-	//manager := codex.NewGolangProjectManager(g.MainPath)
-
 	packageInfos := []PackageInfo{{ImportPath: g.GetImportPath(bizPackage.AbsPackagePath)}}
 
 	imports, err := ParseImports(g.MainFile)
@@ -375,8 +399,20 @@ func (g *GoCoder) AddBizPackage(ctx context.Context, bizPackage *coder.BizPackag
 	if err != nil {
 		return nil, err
 	}
-
-	return &coder.BizPackageResp{Version: g.GetNextVersion()}, nil
+	msg := GitCommitMsg{Version: g.Version, Msg: bizPackage.Desc}
+	git, err := InitGit(g)
+	if err != nil {
+		return nil, err
+	}
+	err = git.AddAll()
+	if err != nil {
+		return nil, err
+	}
+	hash, err := git.CommitAll(msg.JSON())
+	if err != nil {
+		return nil, err
+	}
+	return &coder.BizPackageResp{Version: g.Version, Hash: hash}, nil
 }
 
 func (g *GoCoder) addApi(ctx context.Context, api *coder.CodeApi) error {
@@ -443,12 +479,12 @@ func (g *GoCoder) DiffApi(ctx context.Context, old string, new string) (add []*a
 	return
 }
 
-func (g *GoCoder) AddApis(ctx context.Context, codeApis []*coder.CodeApi) (resp *coder.AddApisResp, err error) {
+func (g *GoCoder) AddApis(ctx context.Context, req *coder.AddApisReq) (resp *coder.AddApisResp, err error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 	resp = new(coder.AddApisResp)
-	for _, codeApi := range codeApis {
+	for _, codeApi := range req.CodeApis {
 		err = g.addApi(ctx, codeApi)
 		if err != nil {
 			return nil, err
@@ -487,6 +523,20 @@ func (g *GoCoder) AddApis(ctx context.Context, codeApis []*coder.CodeApi) (resp 
 		}
 		logger.Infof(ctx, "GoCoder.UserCall(%+v): success resp:%v", req, call)
 	}
-
+	//此时发生了变更，需要重新编译，另外需要提交一下代码，保证可以及时回滚，
+	msg := GitCommitMsg{Version: newVersion, Msg: req.Msg}
+	git, err := InitGit(g)
+	if err != nil {
+		return nil, err
+	}
+	err = git.AddAll()
+	if err != nil {
+		return nil, err
+	}
+	hash, err := git.CommitAll(msg.JSON())
+	if err != nil {
+		return nil, err
+	}
+	resp.Hash = hash
 	return resp, nil
 }

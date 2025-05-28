@@ -7,7 +7,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/yunhanshu-net/pkg/dto/runnerproject"
 	"github.com/yunhanshu-net/runcher/conf"
-	"github.com/yunhanshu-net/runcher/model/dto/coder"
+	"github.com/yunhanshu-net/runcher/pkg/dto/coder"
 	"github.com/yunhanshu-net/runcher/pkg/logger"
 	"github.com/yunhanshu-net/runcher/runner"
 )
@@ -18,7 +18,7 @@ func (s *Scheduler) addApisByNats(ctx context.Context, req *coder.AddApisReq) (*
 	if err != nil {
 		return nil, err
 	}
-	resp, err = newRunner.AddApis(ctx, req.CodeApis)
+	resp, err = newRunner.AddApis(ctx, req)
 	if err != nil {
 		err = errors.WithMessage(err, "addApisByNats err")
 		return nil, err
