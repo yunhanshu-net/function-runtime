@@ -1,4 +1,4 @@
-module github.com/yunhanshu-net/runcher
+module github.com/yunhanshu-net/function-runtime
 
 go 1.23.0
 

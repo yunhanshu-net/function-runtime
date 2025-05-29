@@ -60,7 +60,7 @@ func processImportLine(parts []string) (packages []PackageInfo) {
 		path := strings.Trim(matches[2], `"`)
 
 		// 排除runner包
-		if path == "github.com/yunhanshu-net/sdk-go/runner" {
+		if path == "github.com/yunhanshu-net/function-go/runner" {
 			return
 		}
 

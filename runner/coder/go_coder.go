@@ -5,6 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/yunhanshu-net/function-go/pkg/dto/api"
+	"github.com/yunhanshu-net/function-go/pkg/dto/response"
+	"github.com/yunhanshu-net/function-go/pkg/dto/usercall"
+	"github.com/yunhanshu-net/function-runtime/conf"
+	"github.com/yunhanshu-net/function-runtime/pkg/dto/coder"
+	"github.com/yunhanshu-net/function-runtime/pkg/logger"
+	"github.com/yunhanshu-net/function-runtime/status"
 	"github.com/yunhanshu-net/pkg/constants"
 	usercallConst "github.com/yunhanshu-net/pkg/constants/usercall"
 	"github.com/yunhanshu-net/pkg/dto/runnerproject"
@@ -13,13 +20,6 @@ import (
 	"github.com/yunhanshu-net/pkg/x/osx"
 	"github.com/yunhanshu-net/pkg/x/slicesx"
 	"github.com/yunhanshu-net/pkg/x/stringsx"
-	"github.com/yunhanshu-net/runcher/conf"
-	"github.com/yunhanshu-net/runcher/pkg/dto/coder"
-	"github.com/yunhanshu-net/runcher/pkg/logger"
-	"github.com/yunhanshu-net/runcher/status"
-	"github.com/yunhanshu-net/sdk-go/pkg/dto/api"
-	"github.com/yunhanshu-net/sdk-go/pkg/dto/response"
-	"github.com/yunhanshu-net/sdk-go/pkg/dto/usercall"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,7 +35,7 @@ type GoCoder struct {
 	UseGoMod bool
 	//CurrentBuildName string //user_name_v1
 	//NextBuildName    string //user_name_v2
-	ModuleRoot   string //github.com/yunhanshu-net/sdk-go prod
+	ModuleRoot   string //github.com/yunhanshu-net/function-go prod
 	SaveRoot     string //整个项目的根目录soft/
 	SavePath     string //当前项目的存储位置 /soft/$user/$name
 	CodePath     string //存放目录代码 /soft/$user/$name/code/cmd
@@ -161,7 +161,7 @@ func (g *GoCoder) UserCall(ctx context.Context, req *usercall.Request) (resp *us
 
 func (g *GoCoder) GetImportPath(addPkgPath string) string {
 	if g.IsDev {
-		return filepath.Join(fmt.Sprintf("github.com/yunhanshu-net/sdk-go/soft/%s/%s/code/api", g.User, g.Name), addPkgPath)
+		return filepath.Join(fmt.Sprintf("github.com/yunhanshu-net/function-go/soft/%s/%s/code/api", g.User, g.Name), addPkgPath)
 	}
 	return filepath.Join(fmt.Sprintf("git.yunhanshu.net/%s/%s/api", g.User, g.Name), addPkgPath)
 }
@@ -224,10 +224,10 @@ func (g *GoCoder) buildProject(ctx context.Context) (version string, err error) 
 		Output:  g.ReleasesPath + "/" + g.GetNextBuildName(),
 	}
 	ldflags := fmt.Sprintf(
-		`-X 'github.com/yunhanshu-net/sdk-go/env.Version=%s' `+
-			`-X 'github.com/yunhanshu-net/sdk-go/env.User=%s' `+
-			`-X 'github.com/yunhanshu-net/sdk-go/env.Name=%s' `+
-			`-X 'github.com/yunhanshu-net/sdk-go/env.Root=%s'`,
+		`-X 'github.com/yunhanshu-net/function-go/env.Version=%s' `+
+			`-X 'github.com/yunhanshu-net/function-go/env.User=%s' `+
+			`-X 'github.com/yunhanshu-net/function-go/env.Name=%s' `+
+			`-X 'github.com/yunhanshu-net/function-go/env.Root=%s'`,
 		buildConfig.Version,
 		buildConfig.User,
 		buildConfig.Name,

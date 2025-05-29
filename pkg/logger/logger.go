@@ -2,7 +2,7 @@ package logger
 
 import (
 	"context"
-	"github.com/yunhanshu-net/runcher/pkg/config"
+	"github.com/yunhanshu-net/function-runtime/pkg/config"
 	"os"
 	"path/filepath"
 

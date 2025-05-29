@@ -3,7 +3,7 @@ package coder
 const mainTemplate = `package main
 
 import (
-	"github.com/yunhanshu-net/sdk-go/runner"{{if .Packages}}
+	"github.com/yunhanshu-net/function-go/runner"{{if .Packages}}
 	{{- range .Packages}}
 	_ "{{.ImportPath}}"{{end}}{{end}}
 )

@@ -1,7 +1,7 @@
 package runtime
 
 import (
-	"github.com/yunhanshu-net/runcher/runner"
+	"github.com/yunhanshu-net/function-runtime/runner"
 	"sync"
 	"time"
 )

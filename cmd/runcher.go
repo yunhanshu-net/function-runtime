@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/yunhanshu-net/runcher/kernel"
-	"github.com/yunhanshu-net/runcher/pkg/http2nats"
+	"github.com/yunhanshu-net/function-runtime/kernel"
+	"github.com/yunhanshu-net/function-runtime/pkg/http2nats"
 )
 
 var Runcher *kernel.Runcher

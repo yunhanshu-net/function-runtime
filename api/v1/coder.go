@@ -2,7 +2,7 @@ package v1
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/yunhanshu-net/runcher/pkg/http2nats"
+	"github.com/yunhanshu-net/function-runtime/pkg/http2nats"
 )
 
 func Manage(c *gin.Context) {

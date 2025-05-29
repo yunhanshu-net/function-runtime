@@ -2,8 +2,8 @@ package coder
 
 import (
 	"context"
+	"github.com/yunhanshu-net/function-runtime/pkg/dto/coder"
 	"github.com/yunhanshu-net/pkg/dto/runnerproject"
-	"github.com/yunhanshu-net/runcher/pkg/dto/coder"
 )
 
 type Coder interface {
