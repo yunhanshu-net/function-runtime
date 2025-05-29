@@ -1,0 +1,31 @@
+{
+  "server": {
+    "port": 8080,
+    "mode": "debug",
+    "read_timeout": 60,
+    "write_timeout": 60
+  },
+  "database": {
+    "type": "mysql",
+    "host": "localhost",
+    "port": 3306,
+    "user": "root",
+    "password": "password",
+    "name": "yunhanshu",
+    "max_idle_conns": 10,
+    "max_open_conns": 100,
+    "max_lifetime": 3600
+  },
+  "log": {
+    "level": "debug",
+    "filename": "logs/app.log",
+    "max_size": 100,
+    "max_backups": 10,
+    "max_age": 30,
+    "compress": true
+  },
+  "runcher": {
+    "nats_url": "nats://localhost:4222",
+    "timeout": 20
+  }
+}
