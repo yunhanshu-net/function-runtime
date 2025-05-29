@@ -5,7 +5,6 @@ import (
 	"github.com/yunhanshu-net/pkg/dto/runnerproject"
 	"github.com/yunhanshu-net/sdk-go/pkg/dto/api"
 	"path/filepath"
-	"strings"
 )
 
 type BizPackage struct {
@@ -18,13 +17,12 @@ type BizPackage struct {
 	Desc           string `json:"desc"`
 }
 
-func (c *BizPackage) GetPackageSaveFullPath(sourceCodeDir string) (savePath string, absPackagePath string) {
-	savePath = strings.TrimSuffix(sourceCodeDir, "/") + "/api"
-	absPackagePath = savePath + "/" + c.AbsPackagePath
-	return savePath, absPackagePath
+func (c *BizPackage) GetSubPackagePath() string {
+	return c.AbsPackagePath
 }
+
 func (c *BizPackage) GetPackageAbsPath(apiPath string) (absPackagePath string) {
-	return filepath.Join(apiPath, c.AbsPackagePath)
+	return filepath.Join(apiPath, c.GetSubPackagePath())
 }
 
 func (c *BizPackage) GetPackageName() string {

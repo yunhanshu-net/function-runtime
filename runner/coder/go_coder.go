@@ -384,7 +384,7 @@ func (g *GoCoder) AddBizPackage(ctx context.Context, bizPackage *coder.BizPackag
 		return nil, err
 	}
 
-	packageInfos := []PackageInfo{{ImportPath: g.GetImportPath(bizPackage.AbsPackagePath)}}
+	packageInfos := []PackageInfo{{ImportPath: g.GetImportPath(bizPackage.GetSubPackagePath())}}
 
 	imports, err := ParseImports(g.MainFile)
 	if err != nil {
@@ -419,7 +419,7 @@ func (g *GoCoder) addApi(ctx context.Context, api *coder.CodeApi) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	err := osx.UpsertFile(filepath.Join(g.ApiPath, api.AbsPackagePath, api.EnName+".go"), api.Code)
+	err := osx.UpsertFile(filepath.Join(g.ApiPath, api.GetSubPackagePath(), api.EnName+".go"), api.Code)
 	if err != nil {
 		return err
 	}
@@ -539,4 +539,25 @@ func (g *GoCoder) AddApis(ctx context.Context, req *coder.AddApisReq) (resp *cod
 	}
 	resp.Hash = hash
 	return resp, nil
+}
+
+func (g *GoCoder) DeleteProject(ctx context.Context, req *coder.DeleteProjectReq) (*coder.DeleteProjectResp, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	go func() {
+		err := os.RemoveAll(g.SavePath)
+		if err != nil {
+			logger.Errorf(ctx, "os.RemoveAll(g.SavePath) error: %v path:%s", err, g.SavePath)
+		}
+	}()
+	return &coder.DeleteProjectResp{}, nil
+}
+
+func (g *GoCoder) DeleteApis(ctx context.Context, req *coder.DeleteApisReq) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	//todo
+	return nil
 }

@@ -10,6 +10,7 @@ type Coder interface {
 	AddBizPackage(ctx context.Context, codeBizPackage *coder.BizPackage) (*coder.BizPackageResp, error)
 	AddApis(ctx context.Context, codeApis *coder.AddApisReq) (resp *coder.AddApisResp, err error)
 	CreateProject(ctx context.Context) (*coder.CreateProjectResp, error)
+	DeleteProject(ctx context.Context, req *coder.DeleteProjectReq) (*coder.DeleteProjectResp, error)
 }
 
 func NewCoder(runner *runnerproject.Runner) (Coder, error) {

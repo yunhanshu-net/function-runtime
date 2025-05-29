@@ -1,15 +1,10 @@
 package coder
 
-import (
-	"github.com/yunhanshu-net/runcher/conf"
-	"strings"
-)
-
 type CodeApi struct {
 	Language       string `json:"language"`
 	Code           string `json:"code"`
 	Package        string `json:"package"`
-	AbsPackagePath string `json:"abs_package_path"`
+	AbsPackagePath string `json:"abs_package_path"` //这是绝对路径
 	//FilePath       string `json:"file_path"`
 	EnName string `json:"en_name"`
 	CnName string `json:"cn_name"`
@@ -28,16 +23,8 @@ type CodeApiCreateInfo struct {
 	Status string `json:"status"`
 }
 
-func (c *CodeApi) GetFileSaveFullPath(sourceCodeDir string, nextVersion string) (fullPath string, absFilePath string) {
-	if conf.IsDev() {
-		fullPath = strings.TrimSuffix(sourceCodeDir, "/") + "/debug" + "/api/" + strings.Trim(c.AbsPackagePath, "/")
-
-	} else {
-		fullPath = strings.TrimSuffix(sourceCodeDir, "/") + "/" + nextVersion + "/api/" + strings.Trim(c.AbsPackagePath, "/")
-
-	}
-	absFilePath = fullPath + "/" + c.GetFileName()
-	return fullPath, absFilePath
+func (c *CodeApi) GetSubPackagePath() string {
+	return c.AbsPackagePath
 }
 
 func (c *CodeApi) GetFileName() string {

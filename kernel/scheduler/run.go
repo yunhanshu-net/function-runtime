@@ -60,33 +60,21 @@ func (s *Scheduler) Run() error {
 			panic(err)
 		}
 		rsp.Data = marshal
-		//switch response.Body.(type) {
-		//case string:
-		//	rsp.Data = []byte(response.Body.(string))
-		//default:
-		//	rsp.Data, err = json.Marshal(response.Body)
-		//	if err != nil {
-		//		logger.Error(ctx, "request error", err)
-		//	}
-		//}
 
 		err = msg.RespondMsg(rsp)
 		if err != nil {
 			logger.Error(ctx, "request error", err)
 			return
 		}
-		//logger.Info(ctx, "request success", zap.String("uid", msg.Subject))
 	})
 	if err != nil {
 		return err
 	}
 	s.functionSub = functionSub
 
-	//group := uuid.New().String()
 	//监听runner的启动和关闭事件
 	subscribe, err := s.natsConn.Subscribe("close.runner", func(msg *nats.Msg) {
 		ctx := context.WithValue(context.Background(), constants.TraceID, msg.Header.Get(constants.TraceID))
-
 		logger.Infof(ctx, "runner.close >%s uid:%s", msg.Subject, string(msg.Data))
 		//接收runner关闭
 		rn, err := runnerproject.NewRunner(msg.Header.Get("user"), msg.Header.Get("name"), conf.GetRunnerRoot(), msg.Header.Get("version"))
@@ -123,9 +111,6 @@ func (s *Scheduler) Run() error {
 		}()
 		subjects := strings.Split(msg.Subject, ".")
 		subject := subjects[1]
-		//if subject == "addApi" {
-		//	s.AddApiByNats(ctx, msg)
-		//}
 
 		if subject == "addApis" {
 			s.AddApisByNats(ctx, msg)
@@ -137,6 +122,9 @@ func (s *Scheduler) Run() error {
 
 		if subject == "addBizPackage" {
 			s.AddBizPackage(ctx, msg)
+		}
+		if subject == "deleteProject" {
+			s.DeleteProject(ctx, msg)
 		}
 
 	})

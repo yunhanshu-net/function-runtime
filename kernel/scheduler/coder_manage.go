@@ -25,14 +25,29 @@ func (s *Scheduler) addApisByNats(ctx context.Context, req *coder.AddApisReq) (*
 	}
 	return resp, nil
 }
+func (s *Scheduler) deleteProjectByNats(ctx context.Context, req *coder.DeleteProjectReq) (*coder.DeleteProjectResp, error) {
+	var resp = new(coder.DeleteProjectResp)
+
+	rn, err := runnerproject.NewRunner(req.User, req.Runner, conf.GetRunnerRoot())
+	if err != nil {
+		return nil, err
+	}
+	newRunner, err := runner.NewRunner(*rn)
+	if err != nil {
+		return nil, err
+	}
+	resp, err = newRunner.DeleteProject(ctx, req)
+	if err != nil {
+		err = errors.WithMessage(err, "deleteProjectByNats err")
+		return nil, err
+	}
+	return resp, nil
+}
 
 func (s *Scheduler) AddApisByNats(ctx context.Context, msg *nats.Msg) {
 	var req coder.AddApisReq
 	var resp = new(coder.AddApisResp)
-	//var callbackResp = new(syscallback.ResponseWith[*syscallback.SysOnVersionChangeResp])
-
 	var err error
-	//var errs []*coder.CodeApiCreateInfo
 	defer func() {
 		rspMsg := nats.NewMsg(msg.Subject)
 		if err != nil {
@@ -41,7 +56,6 @@ func (s *Scheduler) AddApisByNats(ctx context.Context, msg *nats.Msg) {
 		} else {
 			rspMsg.Header.Set("code", "0")
 		}
-		//resp.SyscallChangeVersion = callbackResp.Data
 		marshal, _ := json.Marshal(resp)
 		rspMsg.Data = marshal
 		err2 := msg.RespondMsg(rspMsg)
@@ -65,6 +79,36 @@ func (s *Scheduler) AddApisByNats(ctx context.Context, msg *nats.Msg) {
 	}
 }
 
+func (s *Scheduler) DeleteProject(ctx context.Context, msg *nats.Msg) {
+	var req coder.DeleteProjectReq
+	var resp = new(coder.DeleteProjectResp)
+	var err error
+	defer func() {
+		rspMsg := nats.NewMsg(msg.Subject)
+		if err != nil {
+			rspMsg.Header.Set("code", "-1")
+			rspMsg.Header.Set("msg", err.Error())
+		} else {
+			rspMsg.Header.Set("code", "0")
+		}
+		marshal, _ := json.Marshal(resp)
+		rspMsg.Data = marshal
+		err2 := msg.RespondMsg(rspMsg)
+		if err2 != nil {
+			logger.Errorf(ctx, "[AddApiByNats] msg.RespondMsg(rspMsg) err:%s err2:%s req:%+v", err.Error(), err2, req)
+		}
+	}()
+	err = json.Unmarshal(msg.Data, &req)
+	if err != nil {
+		return
+	}
+
+	resp, err = s.deleteProjectByNats(ctx, &req)
+	if err != nil {
+		return
+	}
+}
+
 func (s *Scheduler) addBizPackage(ctx context.Context, r *coder.BizPackage) (*coder.BizPackageResp, error) {
 	newRunner, err := runner.NewRunner(*r.Runner)
 	if err != nil {
@@ -81,10 +125,7 @@ func (s *Scheduler) addBizPackage(ctx context.Context, r *coder.BizPackage) (*co
 func (s *Scheduler) AddBizPackage(ctx context.Context, msg *nats.Msg) {
 	var req coder.BizPackage
 	var resp = new(coder.BizPackageResp)
-	//var callbackResp = new(syscallback.ResponseWith[*syscallback.SysOnVersionChangeResp])
-
 	var err error
-	//var errs []*coder.CodeApiCreateInfo
 	defer func() {
 		rspMsg := nats.NewMsg(msg.Subject)
 		if err != nil {
@@ -93,7 +134,6 @@ func (s *Scheduler) AddBizPackage(ctx context.Context, msg *nats.Msg) {
 		} else {
 			rspMsg.Header.Set("code", "0")
 		}
-		//resp.SyscallChangeVersion = callbackResp.Data
 		marshal, _ := json.Marshal(resp)
 		rspMsg.Data = marshal
 		err2 := msg.RespondMsg(rspMsg)
@@ -135,7 +175,6 @@ func (s *Scheduler) CreateProject(ctx context.Context, msg *nats.Msg) {
 	var req coder.CreateProjectReq
 	var resp = new(coder.CreateProjectResp)
 	var err error
-	//var errs []*coder.CodeApiCreateInfo
 	defer func() {
 		rspMsg := nats.NewMsg(msg.Subject)
 		if err != nil {
