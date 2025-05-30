@@ -7,10 +7,10 @@ import (
 	"github.com/yunhanshu-net/function-go/pkg/dto/request"
 	"github.com/yunhanshu-net/function-go/pkg/dto/response"
 	"github.com/yunhanshu-net/function-runtime/conf"
-	"github.com/yunhanshu-net/function-runtime/pkg/logger"
 	"github.com/yunhanshu-net/function-runtime/runner"
 	"github.com/yunhanshu-net/function-runtime/runtime"
 	"github.com/yunhanshu-net/pkg/dto/runnerproject"
+	"github.com/yunhanshu-net/pkg/logger"
 	"sync"
 )
 

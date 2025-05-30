@@ -2,7 +2,7 @@ package model
 
 import (
 	"fmt"
-	"github.com/yunhanshu-net/function-runtime/pkg/osx"
+	"github.com/yunhanshu-net/pkg/x/osx"
 	"path/filepath"
 	"strconv"
 	"strings"

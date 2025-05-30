@@ -6,7 +6,7 @@ import (
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/yunhanshu-net/function-runtime/kernel/scheduler"
-	"github.com/yunhanshu-net/function-runtime/pkg/logger"
+	"github.com/yunhanshu-net/pkg/logger"
 	"github.com/yunhanshu-net/pkg/x/natsx"
 	"sync"
 	"time"
