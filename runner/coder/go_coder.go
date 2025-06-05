@@ -204,8 +204,7 @@ func (g *GoCoder) buildProject(ctx context.Context) (version string, err error) 
 	tidy := exec.Command("go", "mod", "tidy")
 	tidy.Dir = g.CodePath
 	if output, err := tidy.CombinedOutput(); err != nil {
-		logger.Errorf(ctx, "g:%+v\n", g)
-		logger.Errorf(ctx, "buildProject tidy:%+v\n", string(output))
+		logger.Errorf(ctx, "g:%+v buildProject tidy:%+v\n", g, string(output))
 		return "", fmt.Errorf("go mod tidy failed: %v\n%s", err, string(output))
 	}
 	version = g.GetNextVersion()
@@ -291,12 +290,7 @@ func (g *GoCoder) refreshApiLogs(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("getApiInfos failed: %v\n%s", err, string(output))
 	}
-
-	logs := api.ApiLogs{
-		Version: version,
-		Apis:    res,
-	}
-
+	logs := api.ApiLogs{Version: version, Apis: res}
 	err = jsonx.SaveFile(filepath.Join(g.ApiLogsPath, g.GetNextVersion()+".json"), logs)
 	if err != nil {
 		return fmt.Errorf("getApiInfos failed: %v\n%s", err, string(output))
@@ -508,20 +502,33 @@ func (g *GoCoder) AddApis(ctx context.Context, req *coder.AddApisReq) (resp *cod
 	}
 	//此时需要回调
 	for _, info := range resp.ApiChangeInfo.AddApi {
+		if info.CreateTables != nil {
+			var req0 usercall.Request
+			req0.Method = info.Method
+			req0.Router = info.Router
+			req0.Type = usercallConst.CallbackTypeOnCreateTables
+			call, err1 := g.UserCall(ctx, &req0)
+			if err1 != nil {
+				logger.Errorf(ctx, "GoCoder.UserCall(%+v) CallbackTypeOnCreateTables err: %v", req, err1)
+				continue
+			}
+			logger.Infof(ctx, "GoCoder.UserCall(%+v):CallbackTypeOnCreateTables success resp:%v", req, call)
+		}
+
 		if !slicesx.ContainsString(info.Callbacks, usercallConst.UserCallTypeOnApiCreated) {
 			logger.Infof(ctx, "api no callback:%s ", usercallConst.UserCallTypeOnApiCreated)
 			continue
 		}
-		var req usercall.Request
-		req.Method = info.Method
-		req.Router = info.Router
-		req.Type = usercallConst.UserCallTypeOnApiCreated
-		call, err1 := g.UserCall(ctx, &req)
+		var req1 usercall.Request
+		req1.Method = info.Method
+		req1.Router = info.Router
+		req1.Type = usercallConst.UserCallTypeOnApiCreated
+		call, err1 := g.UserCall(ctx, &req1)
 		if err1 != nil {
-			logger.Errorf(ctx, "GoCoder.UserCall(%+v) err: %v", req, err1)
+			logger.Errorf(ctx, "GoCoder.UserCall(%+v) UserCallTypeOnApiCreated err: %v", req, err1)
 			continue
 		}
-		logger.Infof(ctx, "GoCoder.UserCall(%+v): success resp:%v", req, call)
+		logger.Infof(ctx, "GoCoder.UserCall(%+v): success UserCallTypeOnApiCreated resp:%v", req, call)
 	}
 	//此时发生了变更，需要重新编译，另外需要提交一下代码，保证可以及时回滚，
 	msg := GitCommitMsg{Version: newVersion, Msg: req.Msg}

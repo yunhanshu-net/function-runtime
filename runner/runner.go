@@ -260,7 +260,7 @@ func (r *cmdRunner) requestByNats(ctx context.Context, runnerRequest *request.Ru
 	}
 	msg.Data = marshal
 	msg.Header.Set(constants.TraceID, runnerRequest.TraceID)
-	respMsg, err := r.natsConn.RequestMsg(msg, time.Second*20)
+	respMsg, err := r.natsConn.RequestMsg(msg, time.Second*200)
 	if err != nil {
 		return nil, fmt.Errorf("NATS请求失败: %w", err)
 	}
