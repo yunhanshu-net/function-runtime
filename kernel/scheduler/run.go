@@ -115,18 +115,18 @@ func (s *Scheduler) Run() error {
 		if subject == "addApis" {
 			s.AddApisByNats(ctx, msg)
 		}
-
 		if subject == "createProject" {
 			s.CreateProject(ctx, msg)
 		}
-
 		if subject == "addBizPackage" {
 			s.AddBizPackage(ctx, msg)
 		}
 		if subject == "deleteProject" {
 			s.DeleteProject(ctx, msg)
 		}
-
+		if subject == "deleteApis" {
+			s.DeleteApisByNats(ctx, msg)
+		}
 	})
 	if err != nil {
 		return err

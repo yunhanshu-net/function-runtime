@@ -109,6 +109,54 @@ func (s *Scheduler) DeleteProject(ctx context.Context, msg *nats.Msg) {
 	}
 }
 
+func (s *Scheduler) DeleteApisByNats(ctx context.Context, msg *nats.Msg) {
+	var req coder.DeleteAPIsReq
+	var resp = new(coder.DeleteAPIsResp)
+	var err error
+	defer func() {
+		rspMsg := nats.NewMsg(msg.Subject)
+		if err != nil {
+			rspMsg.Header.Set("code", "-1")
+			rspMsg.Header.Set("msg", err.Error())
+		} else {
+			rspMsg.Header.Set("code", "0")
+		}
+		marshal, _ := json.Marshal(resp)
+		rspMsg.Data = marshal
+		err2 := msg.RespondMsg(rspMsg)
+		if err2 != nil {
+			logger.Errorf(ctx, "[DeleteApisByNats] msg.RespondMsg(rspMsg) err:%s err2:%s req:%+v", err.Error(), err2, req)
+		}
+	}()
+	err = json.Unmarshal(msg.Data, &req)
+	if err != nil {
+		return
+	}
+	newRunner, err := runnerproject.NewRunner(req.Runner.User, req.Runner.Name, conf.GetRunnerRoot())
+	if err != nil {
+		return
+	}
+	req.Runner = newRunner
+
+	resp, err = s.deleteApisByNats(ctx, &req)
+	if err != nil {
+		return
+	}
+}
+
+func (s *Scheduler) deleteApisByNats(ctx context.Context, req *coder.DeleteAPIsReq) (*coder.DeleteAPIsResp, error) {
+	newRunner, err := runner.NewRunner(*req.Runner)
+	if err != nil {
+		return nil, err
+	}
+	rsp, err := newRunner.DeleteApis(ctx, req)
+	if err != nil {
+		err = errors.WithMessage(err, "DeleteApis err")
+		return nil, err
+	}
+	return rsp, nil
+}
+
 func (s *Scheduler) addBizPackage(ctx context.Context, r *coder.BizPackage) (*coder.BizPackageResp, error) {
 	newRunner, err := runner.NewRunner(*r.Runner)
 	if err != nil {

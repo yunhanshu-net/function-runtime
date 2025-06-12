@@ -192,22 +192,23 @@ func (g *GoCoder) GenMainGo(packages []PackageInfo) error {
 	return nil
 }
 
-func (g *GoCoder) buildProject(ctx context.Context) (version string, err error) {
+func (g *GoCoder) buildProject(ctx context.Context) (info *coder.ApiChangeInfo, err error) {
 	if ctx.Err() != nil {
-		return "", ctx.Err()
+		return nil, ctx.Err()
 	}
 	if !g.IsDev {
 		if !osx.FileExists(filepath.Join(g.CodePath, "go.mod")) {
-			return "", fmt.Errorf("CodePath %s is not a Go module root", g.CodePath)
+			return nil, fmt.Errorf("CodePath %s is not a Go module root", g.CodePath)
 		}
 	}
 	tidy := exec.Command("go", "mod", "tidy")
 	tidy.Dir = g.CodePath
 	if output, err := tidy.CombinedOutput(); err != nil {
 		logger.Errorf(ctx, "g:%+v buildProject tidy:%+v\n", g, string(output))
-		return "", fmt.Errorf("go mod tidy failed: %v\n%s", err, string(output))
+		return nil, fmt.Errorf("go mod tidy failed: %v\n%s", err, string(output))
 	}
-	version = g.GetNextVersion()
+	oldVersion := g.Version
+	version := g.GetNextVersion()
 	// 定义可注入变量的结构体
 	type BuildConfig struct {
 		Version string
@@ -245,26 +246,38 @@ func (g *GoCoder) buildProject(ctx context.Context) (version string, err error) 
 	cmd.Dir = g.MainPath
 	if output, e := cmd.CombinedOutput(); e != nil {
 		logger.Errorf(ctx, "buildProject go:%s\n", string(output))
-		return "", fmt.Errorf("go mod tidy failed: %v\n%s", e, string(output))
+		return nil, fmt.Errorf("go build failed: %v\n%s", e, string(output))
 	}
 	//todo git add and commit
 	cmd = exec.Command("ln", "-s", "releases/"+g.GetNextBuildName(), g.GetNextBuildName())
 	cmd.Dir = g.BinPath
 	if output, err := cmd.CombinedOutput(); err != nil {
 		logger.Errorf(ctx, "ln go:%+v\n", string(output))
-		return "", fmt.Errorf("ln failed: %v\n%s", err, string(output))
+		return nil, fmt.Errorf("ln failed: %v\n%s", err, string(output))
 	}
 
 	//生成api log
 	err = g.refreshApiLogs(ctx)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	err = g.refreshVersion(ctx)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return version, nil
+
+	add, del, updated, err := g.DiffApi(ctx, oldVersion, version)
+	if err != nil {
+		return nil, err
+	}
+	rsp := &coder.ApiChangeInfo{
+		CurrentVersion: version,
+		AddApi:         add,
+		DelApi:         del,
+		UpdateApi:      updated,
+	}
+	logger.Infof(ctx, "buildProject success %+v", g)
+	return rsp, nil
 
 }
 
@@ -409,15 +422,16 @@ func (g *GoCoder) AddBizPackage(ctx context.Context, bizPackage *coder.BizPackag
 	return &coder.BizPackageResp{Version: g.Version, Hash: hash}, nil
 }
 
-func (g *GoCoder) addApi(ctx context.Context, api *coder.CodeApi) error {
+func (g *GoCoder) addApi(ctx context.Context, api *coder.CodeApi) (path string, err error) {
 	if ctx.Err() != nil {
-		return ctx.Err()
+		return "", ctx.Err()
 	}
-	err := osx.UpsertFile(filepath.Join(g.ApiPath, api.GetSubPackagePath(), api.EnName+".go"), api.Code)
+	f := filepath.Join(g.ApiPath, api.GetSubPackagePath(), api.EnName+".go")
+	err = osx.UpsertFile(f, api.Code)
 	if err != nil {
-		return err
+		return f, err
 	}
-	return nil
+	return f, nil
 }
 
 // apiEqual 比较两个API是否相等
@@ -478,24 +492,31 @@ func (g *GoCoder) AddApis(ctx context.Context, req *coder.AddApisReq) (resp *cod
 		return nil, ctx.Err()
 	}
 	resp = new(coder.AddApisResp)
+	var addFiles []string
 	for _, codeApi := range req.CodeApis {
-		err = g.addApi(ctx, codeApi)
+		file, err := g.addApi(ctx, codeApi)
 		if err != nil {
 			return nil, err
 		}
+		addFiles = append(addFiles, file)
 	}
 	oldVersion := g.Version
-	newVersion, err := g.buildProject(ctx)
+	res, err := g.buildProject(ctx)
+	if err != nil {
+		for _, file := range addFiles {
+			if file != "" {
+				os.Remove(file)
+			}
+		}
+		return nil, err
+	}
+	add, del, updated, err := g.DiffApi(ctx, oldVersion, res.CurrentVersion)
 	if err != nil {
 		return nil, err
 	}
-	add, del, updated, err := g.DiffApi(ctx, oldVersion, newVersion)
-	if err != nil {
-		return nil, err
-	}
-	resp.Version = newVersion
+	resp.Version = res.CurrentVersion
 	resp.ApiChangeInfo = &coder.ApiChangeInfo{
-		CurrentVersion: newVersion,
+		CurrentVersion: res.CurrentVersion,
 		AddApi:         add,
 		DelApi:         del,
 		UpdateApi:      updated,
@@ -531,7 +552,7 @@ func (g *GoCoder) AddApis(ctx context.Context, req *coder.AddApisReq) (resp *cod
 		logger.Infof(ctx, "GoCoder.UserCall(%+v): success UserCallTypeOnApiCreated resp:%v", req, call)
 	}
 	//此时发生了变更，需要重新编译，另外需要提交一下代码，保证可以及时回滚，
-	msg := GitCommitMsg{Version: newVersion, Msg: req.Msg}
+	msg := GitCommitMsg{Version: res.CurrentVersion, Msg: req.Msg}
 	git, err := InitGit(g)
 	if err != nil {
 		return nil, err
@@ -561,10 +582,38 @@ func (g *GoCoder) DeleteProject(ctx context.Context, req *coder.DeleteProjectReq
 	return &coder.DeleteProjectResp{}, nil
 }
 
-func (g *GoCoder) DeleteApis(ctx context.Context, req *coder.DeleteApisReq) error {
+func (g *GoCoder) DeleteApis(ctx context.Context, req *coder.DeleteAPIsReq) (*coder.DeleteAPIsResp, error) {
 	if ctx.Err() != nil {
-		return ctx.Err()
+		return nil, ctx.Err()
 	}
-	//todo
-	return nil
+
+	for _, codeApi := range req.CodeApis {
+		path := filepath.Join(g.ApiPath, codeApi.GetSubPackagePath(), codeApi.EnName+".go")
+		err := os.Remove(path)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	info, err := g.buildProject(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	//此时发生了变更，需要重新编译，另外需要提交一下代码，保证可以及时回滚，
+	msg := GitCommitMsg{Version: info.CurrentVersion, Msg: req.Msg}
+	git, err := InitGit(g)
+	if err != nil {
+		return nil, err
+	}
+	err = git.AddAll()
+	if err != nil {
+		return nil, err
+	}
+	hash, err := git.CommitAll(msg.JSON())
+	if err != nil {
+		return nil, err
+	}
+
+	return &coder.DeleteAPIsResp{Hash: hash, DelApis: info.DelApi, Version: info.CurrentVersion}, nil
 }

@@ -15,6 +15,12 @@ type AddApisReq struct {
 	Msg      string                `json:"msg"`
 }
 
+type DeleteAPIsReq struct {
+	Runner   *runnerproject.Runner `json:"runner"`
+	CodeApis []*CodeApi            `json:"code_apis"`
+	Msg      string                `json:"msg"`
+}
+
 type DeleteApisReq struct {
 	Runner   *runnerproject.Runner `json:"runner"`
 	CodeApis []*CodeApi            `json:"code_apis"`

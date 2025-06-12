@@ -76,6 +76,20 @@ type AddApisResp struct {
 	ApiChangeInfo *ApiChangeInfo       `json:"api_change_info"`
 }
 
+type DeleteAPIsResp struct {
+	Hash    string      `json:"hash"`
+	DelApis []*api.Info `json:"del_apis"`
+	Version string      `json:"version"`
+}
+
+func (a *DeleteAPIsResp) GetDelApisDesc() string {
+	add := ""
+	for _, v := range a.DelApis {
+		add += fmt.Sprintf("%s(%s)\n", v.ChineseName, v.Router)
+	}
+	return add
+}
+
 type BizPackageResp struct {
 	Version string `json:"version"`
 	Hash    string `json:"hash"`

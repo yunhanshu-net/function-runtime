@@ -9,6 +9,7 @@ import (
 type Coder interface {
 	AddBizPackage(ctx context.Context, codeBizPackage *coder.BizPackage) (*coder.BizPackageResp, error)
 	AddApis(ctx context.Context, codeApis *coder.AddApisReq) (resp *coder.AddApisResp, err error)
+	DeleteApis(ctx context.Context, req *coder.DeleteAPIsReq) (*coder.DeleteAPIsResp, error)
 	CreateProject(ctx context.Context) (*coder.CreateProjectResp, error)
 	DeleteProject(ctx context.Context, req *coder.DeleteProjectReq) (*coder.DeleteProjectResp, error)
 }
