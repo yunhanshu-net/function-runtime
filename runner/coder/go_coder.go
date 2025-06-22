@@ -276,7 +276,7 @@ func (g *GoCoder) buildProject(ctx context.Context) (info *coder.ApiChangeInfo, 
 		DelApi:         del,
 		UpdateApi:      updated,
 	}
-	logger.Infof(ctx, "buildProject success %+v", g)
+	logger.Infof(ctx, "buildProject success %s", g.GetCurrentBuildName())
 	return rsp, nil
 
 }
