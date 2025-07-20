@@ -227,8 +227,7 @@ func (r *cmdRunner) requestByFile(ctx context.Context, req *request.RunFunctionR
 
 	run, _, err := cmdx.Run(ctx, binPath, args)
 	if err != nil {
-		logger.Infof(ctx, "执行命令如下: %s", cc)
-		logger.Errorf(ctx, "cmdx.Run(ctx, binPath, args) err:%s", err)
+		logger.Errorf(ctx, "cmdx.Run(ctx, binPath, args) 执行命令如下：%s err:%s", cc, err)
 		return nil, err
 	}
 
