@@ -12,6 +12,7 @@ type Coder interface {
 	DeleteApis(ctx context.Context, req *coder.DeleteAPIsReq) (*coder.DeleteAPIsResp, error)
 	CreateProject(ctx context.Context) (*coder.CreateProjectResp, error)
 	DeleteProject(ctx context.Context, req *coder.DeleteProjectReq) (*coder.DeleteProjectResp, error)
+	RebuildProject(ctx context.Context, req *coder.RebuildProjectReq) (*coder.RebuildProjectResp, error)
 }
 
 func NewCoder(runner *runnerproject.Runner) (Coder, error) {

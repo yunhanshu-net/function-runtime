@@ -17,36 +17,6 @@ type Runner struct {
 	root     string //
 }
 
-func NewRunner(user string, name string, root string, version ...string) (*Runner, error) {
-	if user == "" {
-		return nil, fmt.Errorf("user is empty")
-	}
-	if name == "" {
-		return nil, fmt.Errorf("name is empty")
-	}
-	r := Runner{
-		User: user,
-		Name: name,
-		root: root,
-	}
-
-	v := ""
-	if len(version) > 0 {
-		v = version[0]
-		b := isVersion(v)
-		r.Version = v
-		if !b {
-			return nil, fmt.Errorf("is failed version")
-		}
-	} else {
-		vs, err := r.GetCurrentVersion()
-		if err != nil {
-			return nil, err
-		}
-		r.Version = vs
-	}
-	return &r, nil
-}
 func isVersion(v string) bool {
 	if v == "" {
 		return false

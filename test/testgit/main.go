@@ -64,7 +64,7 @@ func main() {
 	//commitMsg := "Initial commit"
 	//h, err := worktree.Commit(commitMsg, &git.CommitOptions{
 	//	Author: &object.Signature{
-	//		Name:  "beiluo",
+	//		CnName:  "beiluo",
 	//		Email: "beiluo@email.com",
 	//		When:  time.Now(),
 	//	},

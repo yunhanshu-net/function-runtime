@@ -127,6 +127,9 @@ func (s *Scheduler) Run() error {
 		if subject == "deleteApis" {
 			s.DeleteApisByNats(ctx, msg)
 		}
+		if subject == "rebuildProject" {
+			s.RebuildProjectByNats(ctx, msg)
+		}
 	})
 	if err != nil {
 		return err

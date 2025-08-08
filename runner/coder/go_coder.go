@@ -266,15 +266,17 @@ func (g *GoCoder) buildProject(ctx context.Context) (info *coder.ApiChangeInfo, 
 		return nil, err
 	}
 
-	add, del, updated, err := g.DiffApi(ctx, oldVersion, version)
+	diff, err := g.DiffApi(ctx, oldVersion, version)
 	if err != nil {
 		return nil, err
 	}
 	rsp := &coder.ApiChangeInfo{
 		CurrentVersion: version,
-		AddApi:         add,
-		DelApi:         del,
-		UpdateApi:      updated,
+		AddApi:         diff.add,
+		DelApi:         diff.del,
+		UpdateApi:      diff.updated,
+		New:            diff.new,
+		Old:            diff.old,
 	}
 	logger.Infof(ctx, "buildProject success %s", g.GetCurrentBuildName())
 	return rsp, nil
@@ -440,10 +442,20 @@ func apiEqual(a, b *api.Info) bool {
 	return reflect.DeepEqual(a, b)
 }
 
-func (g *GoCoder) DiffApi(ctx context.Context, old string, new string) (add []*api.Info, del []*api.Info, updated []*api.Info, err error) {
+type DiffApiResp struct {
+	add     []*api.Info
+	del     []*api.Info
+	updated []*api.Info
+
+	old *api.ApiLogs
+	new *api.ApiLogs
+}
+
+func (g *GoCoder) DiffApi(ctx context.Context, old string, new string) (diff *DiffApiResp, err error) {
 	if ctx.Err() != nil {
-		return nil, nil, nil, ctx.Err()
+		return nil, ctx.Err()
 	}
+	diff = &DiffApiResp{}
 	newApiInfos := &api.ApiLogs{}
 	oldApiInfos := &api.ApiLogs{}
 	old = filepath.Join(g.ApiLogsPath, old+".json")
@@ -457,6 +469,8 @@ func (g *GoCoder) DiffApi(ctx context.Context, old string, new string) (add []*a
 	if err != nil {
 		return
 	}
+	diff.old = oldApiInfos
+	diff.new = newApiInfos
 	// 创建旧API的映射，用于快速查找
 	lastApiMap := make(map[string]*api.Info)
 	for _, lastApi := range oldApiInfos.Apis {
@@ -471,20 +485,87 @@ func (g *GoCoder) DiffApi(ctx context.Context, old string, new string) (add []*a
 		if lastApi, exists := lastApiMap[key]; exists {
 			// 检查API是否有更新
 			if !apiEqual(currentApi, lastApi) {
-				updated = append(updated, currentApi)
+				diff.updated = append(diff.updated, currentApi)
 			}
 			// 标记已处理过的API
 			delete(lastApiMap, key)
 		} else {
 			// 新增的API
-			add = append(add, currentApi)
+			diff.add = append(diff.add, currentApi)
 		}
 	}
 	// 剩余未处理的旧API即为已删除的API
 	for _, api := range lastApiMap {
-		del = append(del, api)
+		diff.del = append(diff.del, api)
 	}
 	return
+}
+
+func (g *GoCoder) RebuildProject(ctx context.Context, req *coder.RebuildProjectReq) (*coder.RebuildProjectResp, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	change, err := g.buildProject(ctx)
+	if err != nil {
+		return nil, err
+	}
+	//此时发生了变更，需要重新编译，另外需要提交一下代码，保证可以及时回滚，
+	msg := GitCommitMsg{Version: change.CurrentVersion, Msg: "rebuild project"}
+	git, err := InitGit(g)
+	if err != nil {
+		return nil, err
+	}
+	err = git.AddAll()
+	if err != nil {
+		return nil, err
+	}
+	hash, err := git.CommitAll(msg.JSON())
+	if err != nil {
+		if strings.Contains(err.Error(), "cannot create empty commit: clean working tree") {
+			err = nil
+		} else {
+			return nil, err
+		}
+	}
+	err = g.onAddApi(ctx, change.New.Apis) //强制执行创建的回调
+	if err != nil {
+		return nil, err
+	}
+	return &coder.RebuildProjectResp{Apis: change.New.Apis, CurrentVersion: change.CurrentVersion, Hash: hash}, nil
+}
+
+func (g *GoCoder) onAddApi(ctx context.Context, apis []*api.Info) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	for _, info := range apis {
+		if info.CreateTables != nil {
+			var req0 usercall.Request
+			req0.Method = info.Method
+			req0.Router = info.Router
+			req0.Type = usercallConst.CallbackTypeOnCreateTables
+			call, err1 := g.UserCall(ctx, &req0)
+			if err1 != nil {
+				return fmt.Errorf("GoCoder.UserCall(%+v) CallbackTypeOnCreateTables err: %v", info, err1)
+			}
+			logger.Infof(ctx, "GoCoder.UserCall(%v):CallbackTypeOnCreateTables success resp:%v", info.GetTreePath(), call)
+		}
+
+		if !slicesx.ContainsString(info.Callbacks, usercallConst.UserCallTypeOnApiCreated) {
+			logger.Infof(ctx, "api no callback:%s ", usercallConst.UserCallTypeOnApiCreated)
+			continue
+		}
+		var req1 usercall.Request
+		req1.Method = info.Method
+		req1.Router = info.Router
+		req1.Type = usercallConst.UserCallTypeOnApiCreated
+		call, err1 := g.UserCall(ctx, &req1)
+		if err1 != nil {
+			return fmt.Errorf("GoCoder.UserCall(%+v) UserCallTypeOnApiCreated err: %v", info, err1)
+		}
+		logger.Infof(ctx, "GoCoder.UserCall(%v): success UserCallTypeOnApiCreated resp:%v", info.GetTreePath(), call)
+	}
+	return nil
 }
 
 func (g *GoCoder) AddApis(ctx context.Context, req *coder.AddApisReq) (resp *coder.AddApisResp, err error) {
@@ -500,8 +581,8 @@ func (g *GoCoder) AddApis(ctx context.Context, req *coder.AddApisReq) (resp *cod
 		}
 		addFiles = append(addFiles, file)
 	}
-	oldVersion := g.Version
-	res, err := g.buildProject(ctx)
+	//oldVersion := g.Version
+	diff, err := g.buildProject(ctx)
 	if err != nil {
 		for _, file := range addFiles {
 			if file != "" {
@@ -510,49 +591,52 @@ func (g *GoCoder) AddApis(ctx context.Context, req *coder.AddApisReq) (resp *cod
 		}
 		return nil, err
 	}
-	add, del, updated, err := g.DiffApi(ctx, oldVersion, res.CurrentVersion)
+	//diff, err := g.DiffApi(ctx, oldVersion, res.CurrentVersion)
+	resp.Version = diff.CurrentVersion
+	resp.ApiChangeInfo = &coder.ApiChangeInfo{
+		CurrentVersion: diff.CurrentVersion,
+		AddApi:         diff.AddApi,
+		DelApi:         diff.DelApi,
+		UpdateApi:      diff.UpdateApi,
+	}
+
+	err = g.onAddApi(ctx, resp.ApiChangeInfo.AddApi)
 	if err != nil {
+		logger.Errorf(ctx, "GoCoder.onAddApi err: %v resp:%+v", err, resp)
 		return nil, err
 	}
-	resp.Version = res.CurrentVersion
-	resp.ApiChangeInfo = &coder.ApiChangeInfo{
-		CurrentVersion: res.CurrentVersion,
-		AddApi:         add,
-		DelApi:         del,
-		UpdateApi:      updated,
-	}
 	//此时需要回调
-	for _, info := range resp.ApiChangeInfo.AddApi {
-		if info.CreateTables != nil {
-			var req0 usercall.Request
-			req0.Method = info.Method
-			req0.Router = info.Router
-			req0.Type = usercallConst.CallbackTypeOnCreateTables
-			call, err1 := g.UserCall(ctx, &req0)
-			if err1 != nil {
-				logger.Errorf(ctx, "GoCoder.UserCall(%+v) CallbackTypeOnCreateTables err: %v", req, err1)
-				continue
-			}
-			logger.Infof(ctx, "GoCoder.UserCall(%+v):CallbackTypeOnCreateTables success resp:%v", req, call)
-		}
-
-		if !slicesx.ContainsString(info.Callbacks, usercallConst.UserCallTypeOnApiCreated) {
-			logger.Infof(ctx, "api no callback:%s ", usercallConst.UserCallTypeOnApiCreated)
-			continue
-		}
-		var req1 usercall.Request
-		req1.Method = info.Method
-		req1.Router = info.Router
-		req1.Type = usercallConst.UserCallTypeOnApiCreated
-		call, err1 := g.UserCall(ctx, &req1)
-		if err1 != nil {
-			logger.Errorf(ctx, "GoCoder.UserCall(%+v) UserCallTypeOnApiCreated err: %v", req, err1)
-			continue
-		}
-		logger.Infof(ctx, "GoCoder.UserCall(%+v): success UserCallTypeOnApiCreated resp:%v", req, call)
-	}
+	//for _, info := range resp.ApiChangeInfo.AddApi {
+	//	if info.CreateTables != nil {
+	//		var req0 usercall.Request
+	//		req0.Method = info.Method
+	//		req0.Router = info.Router
+	//		req0.Type = usercallConst.CallbackTypeOnCreateTables
+	//		call, err1 := g.UserCall(ctx, &req0)
+	//		if err1 != nil {
+	//			logger.Errorf(ctx, "GoCoder.UserCall(%+v) CallbackTypeOnCreateTables err: %v", req, err1)
+	//			continue
+	//		}
+	//		logger.Infof(ctx, "GoCoder.UserCall(%+v):CallbackTypeOnCreateTables success resp:%v", req, call)
+	//	}
+	//
+	//	if !slicesx.ContainsString(info.Callbacks, usercallConst.UserCallTypeOnApiCreated) {
+	//		logger.Infof(ctx, "api no callback:%s ", usercallConst.UserCallTypeOnApiCreated)
+	//		continue
+	//	}
+	//	var req1 usercall.Request
+	//	req1.Method = info.Method
+	//	req1.Router = info.Router
+	//	req1.Type = usercallConst.UserCallTypeOnApiCreated
+	//	call, err1 := g.UserCall(ctx, &req1)
+	//	if err1 != nil {
+	//		logger.Errorf(ctx, "GoCoder.UserCall(%+v) UserCallTypeOnApiCreated err: %v", req, err1)
+	//		continue
+	//	}
+	//	logger.Infof(ctx, "GoCoder.UserCall(%+v): success UserCallTypeOnApiCreated resp:%v", req, call)
+	//}
 	//此时发生了变更，需要重新编译，另外需要提交一下代码，保证可以及时回滚，
-	msg := GitCommitMsg{Version: res.CurrentVersion, Msg: req.Msg}
+	msg := GitCommitMsg{Version: diff.CurrentVersion, Msg: req.Msg}
 	git, err := InitGit(g)
 	if err != nil {
 		return nil, err
