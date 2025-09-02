@@ -77,6 +77,12 @@ type AddApisResp struct {
 	ErrList       []*CodeApiCreateInfo `json:"err_list"`
 	ApiChangeInfo *ApiChangeInfo       `json:"api_change_info"`
 }
+type PushApisResp struct {
+	Hash          string               `json:"hash"`
+	Version       string               `json:"version"`
+	ErrList       []*CodeApiCreateInfo `json:"err_list"`
+	ApiChangeInfo *ApiChangeInfo       `json:"api_change_info"`
+}
 
 type DeleteAPIsResp struct {
 	Hash    string      `json:"hash"`

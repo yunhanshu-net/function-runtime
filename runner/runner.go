@@ -39,6 +39,7 @@ type Runner interface {
 	GetID() string
 	GetStatus() string
 	Request(ctx context.Context, req *request.RunFunctionReq) (*response.RunFunctionResp, error)
+	RequestSync(ctx context.Context, runnerRequest *request.RunFunctionReq) error
 }
 
 func NewRunner(runner runnerproject.Runner) (Runner, error) {
@@ -87,6 +88,12 @@ type cmdRunner struct {
 	status         string
 	connectLock    *sync.Mutex
 	connectingLock *sync.Mutex
+
+	//runtime 向runner发送消息
+	runtime2runner *nats.Subscription
+
+	//runner 向runtime发送消息
+	runner2runtime *nats.Subscription
 }
 
 func (r *cmdRunner) GetStatus() string {
@@ -139,6 +146,20 @@ func (r *cmdRunner) connectNats(ctx context.Context, conn *nats.Conn) error {
 		"--runner_id",
 		r.GetID(),
 	}
+
+	//接收runner消息
+	subscription, err := r.natsConn.Subscribe(fmt.Sprintf("recv.runner.%s.%s.%s", r.detail.User, r.detail.Name, r.detail.Version), func(msg *nats.Msg) {
+		//推送消息给function-server
+		msg.Subject = ""
+		err1 := r.natsConn.PublishMsg(msg)
+		fmt.Println(err1.Error())
+	})
+	if err != nil {
+		return err
+	}
+	r.runner2runtime = subscription
+
+	//向runner发送消息
 
 	go func() {
 		_, cmd, err := cmdx.Run(ctx, runner.GetBinPath(), args)
@@ -194,6 +215,12 @@ func (r *cmdRunner) Close() error {
 		defer r.connectLock.Unlock()
 		r.status = StatusClosed
 	}
+	if r.runner2runtime != nil {
+		r.runner2runtime.Unsubscribe()
+	}
+	if r.process != nil {
+		r.process.Kill()
+	}
 	return nil
 }
 
@@ -211,6 +238,7 @@ func (r *cmdRunner) requestByFile(ctx context.Context, req *request.RunFunctionR
 		logger.Errorf(ctx, "保存请求文件失败: path=%s, error=%v", requestJsonPath, err)
 		return nil, err
 	}
+	defer os.Remove(requestJsonPath)
 	args := []string{
 		filepath.Join(binPath, r.detail.GetBuildRunnerCurrentVersionName()),
 		"run",
@@ -273,6 +301,23 @@ func (r *cmdRunner) requestByNats(ctx context.Context, runnerRequest *request.Ru
 	}
 	return &resp, nil
 }
+func (r *cmdRunner) requestByNatsSync(ctx context.Context, runnerRequest *request.RunFunctionReq) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	msg := nats.NewMsg(r.detail.GetRequestSubject())
+	runnerRequest.Runner = r.detail
+	marshal, err := json.Marshal(runnerRequest)
+	if err != nil {
+		return err
+	}
+	msg.Data = marshal
+	msg.Header.Set(constants.TraceID, runnerRequest.TraceID)
+	//respMsg, err := r.natsConn.RequestMsg(msg, time.Second*200)
+	err = r.natsConn.PublishMsg(msg)
+
+	return nil
+}
 
 func (r *cmdRunner) shouldBeClose() bool {
 	if time.Since(r.latestHandelTs).Seconds() > 5 {
@@ -303,11 +348,29 @@ func (r *cmdRunner) Request(ctx context.Context, runnerRequest *request.RunFunct
 		rpc, err := r.requestByNats(ctx, runnerRequest)
 		if err != nil {
 			if strings.Contains(err.Error(), "no such file or directory") { //连接失效了
-				logger.Warnf(ctx, "NATS连接已失效，尝试使用文件方式请求")
+				logger.Warnf(ctx, "NATS连接已失效，尝试降级使用文件方式请求")
 				return r.requestByFile(ctx, runnerRequest)
 			}
 			return nil, err
 		}
 		return rpc, nil
+	}
+}
+func (r *cmdRunner) RequestSync(ctx context.Context, runnerRequest *request.RunFunctionReq) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	//这里检查是否需要启动程序
+	r.qpsLock.Lock()
+	r.latestHandelTs = time.Now()
+	r.qpsWindow[time.Now().Unix()]++
+	r.qpsLock.Unlock()
+
+	if !r.connected {
+		return fmt.Errorf("not connected")
+	} else {
+		runnerRequest.RunnerID = r.GetID()
+		//长连接
+		return r.requestByNatsSync(ctx, runnerRequest)
 	}
 }

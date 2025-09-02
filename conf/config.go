@@ -1,6 +1,7 @@
 package conf
 
 import (
+	"github.com/yunhanshu-net/function-runtime/pkg/config"
 	"os"
 )
 
@@ -9,6 +10,9 @@ var root string
 func GetRunnerRoot() string {
 	if root != "" {
 		return root
+	}
+	if config.Get().ServerConfig.RunnerRoot != "" {
+		return config.Get().ServerConfig.RunnerRoot
 	}
 	if os.Getenv("DEV_ROOT") != "" {
 		root = os.Getenv("DEV_ROOT")
@@ -20,7 +24,7 @@ func GetRunnerRoot() string {
 }
 
 func IsDev() bool {
-	return os.Getenv("DEV_ROOT") != ""
+	return config.Get().ServerConfig.IsDev
 }
 
 type Config struct {

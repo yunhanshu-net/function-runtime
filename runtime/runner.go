@@ -32,6 +32,7 @@ type Runners struct {
 
 	StartLock map[string]*sync.Mutex
 
+	//qps 窗口
 	QpsWindows map[int64]int64
 	Running    []runner.Runner
 }

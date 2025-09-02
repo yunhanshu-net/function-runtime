@@ -14,6 +14,7 @@ import (
 	"github.com/yunhanshu-net/pkg/constants"
 	usercallConst "github.com/yunhanshu-net/pkg/constants/usercall"
 	"github.com/yunhanshu-net/pkg/dto/runnerproject"
+	"github.com/yunhanshu-net/pkg/fmtx"
 	"github.com/yunhanshu-net/pkg/logger"
 	"github.com/yunhanshu-net/pkg/x/cmdx"
 	"github.com/yunhanshu-net/pkg/x/jsonx"
@@ -24,6 +25,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"text/template"
 )
@@ -282,6 +284,70 @@ func (g *GoCoder) buildProject(ctx context.Context) (info *coder.ApiChangeInfo, 
 	return rsp, nil
 
 }
+func (g *GoCoder) buildTest(ctx context.Context) (err error) {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if !g.IsDev {
+		if !osx.FileExists(filepath.Join(g.CodePath, "go.mod")) {
+			return fmt.Errorf("CodePath %s is not a Go module root", g.CodePath)
+		}
+	}
+	tidy := exec.Command("go", "mod", "tidy")
+	tidy.Dir = g.CodePath
+	if output, err := tidy.CombinedOutput(); err != nil {
+		logger.Errorf(ctx, "g:%+v buildProject tidy:%+v\n", g, string(output))
+		return fmt.Errorf("go mod tidy failed: %v\n%s", err, string(output))
+	}
+
+	version := g.GetNextVersion()
+	// 定义可注入变量的结构体
+	type BuildConfig struct {
+		Version string
+		User    string
+		Name    string
+		Root    string
+		Output  string // 输出文件名
+	}
+	buildConfig := BuildConfig{
+		Version: version,
+		User:    g.User,
+		Name:    g.Name,
+		Output:  g.ReleasesPath + "/" + g.GetNextBuildName(),
+	}
+	ldflags := fmt.Sprintf(
+		`-X 'github.com/yunhanshu-net/function-go/env.Version=%s' `+
+			`-X 'github.com/yunhanshu-net/function-go/env.User=%s' `+
+			`-X 'github.com/yunhanshu-net/function-go/env.Name=%s' `+
+			`-X 'github.com/yunhanshu-net/function-go/env.Root=%s'`,
+		buildConfig.Version,
+		buildConfig.User,
+		buildConfig.Name,
+		buildConfig.Root,
+	)
+
+	out := "/dev/null"
+	if runtime.GOOS == "windows" {
+		out = "NUL"
+	}
+
+	// 构造命令
+	cmd := exec.Command(
+		"go",
+		"build",
+		"-ldflags",
+		ldflags,
+		"-o",
+		out,
+	)
+	cmd.Dir = g.MainPath
+	if output, e := cmd.CombinedOutput(); e != nil {
+		logger.Errorf(ctx, "buildTest go:%s\n", string(output))
+		return fmt.Errorf("go build failed: %v\n%s", e, string(output))
+	}
+
+	return nil
+}
 
 func (g *GoCoder) refreshApiLogs(ctx context.Context) error {
 	if ctx.Err() != nil {
@@ -388,7 +454,16 @@ func (g *GoCoder) AddBizPackage(ctx context.Context, bizPackage *coder.BizPackag
 	if err != nil {
 		return nil, err
 	}
-	err = osx.UpsertFile(filepath.Join(absPkgPath, "keep_.go"), fmt.Sprintf("package %s", bizPackage.GetPackageName()))
+
+	routerGroup := bizPackage.GetSubPackagePath()
+
+	routerGroup = strings.Trim(routerGroup, "/")
+	routerGroup = "/" + routerGroup
+	err = osx.UpsertFile(filepath.Join(absPkgPath, "init_.go"), fmt.Sprintf(`package %s
+		var RouterGroup ="%s"
+
+
+`, bizPackage.GetPackageName(), routerGroup))
 	if err != nil {
 		return nil, err
 	}
@@ -428,12 +503,43 @@ func (g *GoCoder) addApi(ctx context.Context, api *coder.CodeApi) (path string, 
 	if ctx.Err() != nil {
 		return "", ctx.Err()
 	}
-	f := filepath.Join(g.ApiPath, api.GetSubPackagePath(), api.EnName+".go")
-	err = osx.UpsertFile(f, api.Code)
+	name := api.EnName
+	if name == "" {
+		name = fmtx.DecodeFileName(api.Code)
+	}
+	if name == "" {
+		return "", fmt.Errorf("code api name is empty")
+	}
+
+	f := filepath.Join(g.ApiPath, api.GetSubPackagePath(), name)
+	//这里可以先对文件进行格式化，剔除无用import和添加缺失引用
+	out, err := fmtx.FixGoImport(f, []byte(api.Code))
+	if err != nil {
+		return "", err
+	}
+	err = osx.UpsertFile(f, out)
 	if err != nil {
 		return f, err
 	}
 	return f, nil
+}
+
+func (g *GoCoder) pushApi(ctx context.Context, api *coder.CodeApi) (path string, upCode string, err error) {
+	if ctx.Err() != nil {
+		return "", "", ctx.Err()
+	}
+
+	f := filepath.Join(g.ApiPath, api.GetSubPackagePath(), api.EnName+".go")
+	//这里可以先对文件进行格式化，剔除无用import和添加缺失引用
+	out, err := fmtx.FixGoImport(f, []byte(api.Code))
+	if err != nil {
+		return "", "", err
+	}
+	err = osx.UpsertFile(f, out)
+	if err != nil {
+		return f, "", err
+	}
+	return f, out, nil
 }
 
 // apiEqual 比较两个API是否相等
@@ -552,7 +658,6 @@ func (g *GoCoder) onAddApi(ctx context.Context, apis []*api.Info) error {
 		}
 
 		if !slicesx.ContainsString(info.Callbacks, usercallConst.UserCallTypeOnApiCreated) {
-			logger.Infof(ctx, "api no callback:%s ", usercallConst.UserCallTypeOnApiCreated)
 			continue
 		}
 		var req1 usercall.Request
@@ -639,6 +744,47 @@ func (g *GoCoder) AddApis(ctx context.Context, req *coder.AddApisReq) (resp *cod
 	msg := GitCommitMsg{Version: diff.CurrentVersion, Msg: req.Msg}
 	git, err := InitGit(g)
 	if err != nil {
+		return nil, err
+	}
+	err = git.AddAll()
+	if err != nil {
+		return nil, err
+	}
+	hash, err := git.CommitAll(msg.JSON())
+	if err != nil {
+		return nil, err
+	}
+	resp.Hash = hash
+	return resp, nil
+}
+func (g *GoCoder) PushApis(ctx context.Context, req *coder.PushApisReq) (resp *coder.PushApisResp, err error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	resp = new(coder.PushApisResp)
+	var addFiles []string
+	for _, codeApi := range req.CodeApis {
+		file, err := g.addApi(ctx, codeApi)
+		if err != nil {
+			return nil, err
+		}
+		addFiles = append(addFiles, file)
+	}
+
+	//此时发生了变更，需要重新编译，另外需要提交一下代码，保证可以及时回滚，
+	msg := GitCommitMsg{Version: req.Runner.Version, Msg: "push api"}
+	git, err := InitGit(g)
+	if err != nil {
+		return nil, err
+	}
+	err = g.buildTest(ctx)
+	if err != nil {
+		//如果编译失败把全部文件删除掉
+		for _, file := range addFiles {
+			if file != "" {
+				os.Remove(file)
+			}
+		}
 		return nil, err
 	}
 	err = git.AddAll()

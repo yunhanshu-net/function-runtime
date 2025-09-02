@@ -42,11 +42,11 @@ func main() {
 
 	// 初始化应用组件
 	cmd.Init()
-	defer func() {
-		if cmd.Runcher != nil {
-			cmd.Runcher.Close()
-		}
-	}()
+	//defer func() {
+	//	if cmd.Runcher != nil {
+	//		cmd.Runcher.Close()
+	//	}
+	//}()
 
 	app := gin.New()
 	router.InitRouter(app)
@@ -70,7 +70,9 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	logger.Info(ctx, "正在关闭服务...")
-
+	if cmd.Runcher != nil {
+		cmd.Runcher.Close()
+	}
 	// 5秒超时关闭服务
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

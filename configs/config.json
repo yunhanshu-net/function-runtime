@@ -3,8 +3,11 @@
     "port": 8080,
     "mode": "debug",
     "read_timeout": 60,
-    "write_timeout": 60
+    "write_timeout": 60,
+    "runner_root":"/Users/beiluo/Documents/work/code/function/function-go/soft",
+    "is_dev": true
   },
+
   "database": {
     "type": "mysql",
     "host": "localhost",

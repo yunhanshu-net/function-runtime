@@ -25,6 +25,19 @@ func (s *Scheduler) addApisByNats(ctx context.Context, req *coder.AddApisReq) (*
 	}
 	return resp, nil
 }
+func (s *Scheduler) pushApisByNats(ctx context.Context, req *coder.PushApisReq) (*coder.PushApisResp, error) {
+	var resp = new(coder.PushApisResp)
+	newRunner, err := runner.NewRunner(*req.Runner)
+	if err != nil {
+		return nil, err
+	}
+	resp, err = newRunner.PushApis(ctx, req)
+	if err != nil {
+		err = errors.WithMessage(err, "pushApisByNats err")
+		return nil, err
+	}
+	return resp, nil
+}
 func (s *Scheduler) deleteProjectByNats(ctx context.Context, req *coder.DeleteProjectReq) (*coder.DeleteProjectResp, error) {
 	var resp = new(coder.DeleteProjectResp)
 
@@ -74,6 +87,41 @@ func (s *Scheduler) AddApisByNats(ctx context.Context, msg *nats.Msg) {
 	req.Runner = newRunner
 
 	resp, err = s.addApisByNats(ctx, &req)
+	if err != nil {
+		return
+	}
+}
+
+func (s *Scheduler) PushApisByNats(ctx context.Context, msg *nats.Msg) {
+	var req coder.PushApisReq
+	var resp = new(coder.PushApisResp)
+	var err error
+	defer func() {
+		rspMsg := nats.NewMsg(msg.Subject)
+		if err != nil {
+			rspMsg.Header.Set("code", "-1")
+			rspMsg.Header.Set("msg", err.Error())
+		} else {
+			rspMsg.Header.Set("code", "0")
+		}
+		marshal, _ := json.Marshal(resp)
+		rspMsg.Data = marshal
+		err2 := msg.RespondMsg(rspMsg)
+		if err2 != nil {
+			logger.Errorf(ctx, "[PushApisByNats] msg.RespondMsg(rspMsg) err:%s err2:%s req:%+v", err.Error(), err2, req)
+		}
+	}()
+	err = json.Unmarshal(msg.Data, &req)
+	if err != nil {
+		return
+	}
+	newRunner, err := runnerproject.NewRunner(req.Runner.User, req.Runner.Name, conf.GetRunnerRoot())
+	if err != nil {
+		return
+	}
+	req.Runner = newRunner
+
+	resp, err = s.pushApisByNats(ctx, &req)
 	if err != nil {
 		return
 	}

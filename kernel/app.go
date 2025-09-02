@@ -8,8 +8,6 @@ import (
 	"github.com/yunhanshu-net/function-runtime/kernel/scheduler"
 	"github.com/yunhanshu-net/pkg/logger"
 	"github.com/yunhanshu-net/pkg/x/natsx"
-	"sync"
-	"time"
 )
 
 // Runcher 是核心运行器，管理调度器和编码器
@@ -18,10 +16,10 @@ type Runcher struct {
 	//Coder      *coder.Coder
 	natsServer *server.Server
 	natsConn   *nats.Conn
-	down       chan struct{}
-	wg         sync.WaitGroup
-	ctx        context.Context
-	cancel     context.CancelFunc
+	//down       chan struct{}
+	//wg         sync.WaitGroup
+	//ctx        context.Context
+	//cancel     context.CancelFunc
 
 	manageSub *nats.Subscription
 }
@@ -34,20 +32,20 @@ func (a *Runcher) GetNatsConn() *nats.Conn {
 // 如果初始化过程中出现任何错误，将会panic
 func MustNewRuncher() *Runcher {
 
-	ctx, cancel := context.WithCancel(context.Background())
-	natsCli, natsSrv, err := natsx.InitNatsWithRetry(ctx, 3)
+	//ctx, cancel := context.WithCancel(context.Background())
+	natsCli, natsSrv, err := natsx.InitNatsWithRetry(context.Background(), 3)
 	if err != nil {
 		panic(fmt.Sprintf("初始化NATS失败: %v", err))
 	}
 
 	return &Runcher{
-		down:       make(chan struct{}, 1),
+		//down:       make(chan struct{}, 1),
 		natsServer: natsSrv,
 		natsConn:   natsCli,
 		Scheduler:  scheduler.NewScheduler(natsCli),
 		//Coder:      coder.NewDefaultCoder(natsCli),
-		ctx:    ctx,
-		cancel: cancel,
+		//ctx:    ctx,
+		//cancel: cancel,
 	}
 }
 
@@ -56,14 +54,15 @@ func (a *Runcher) Run() error {
 	logger.Info(context.Background(), "启动Runcher...")
 
 	// 启动调度器
-	a.wg.Add(1)
+	//a.wg.Add(1)
 	go func() {
-		defer a.wg.Done()
+		//defer a.wg.Done()
 		err := a.Scheduler.Run()
-		if err != nil {
-			logger.Error(context.Background(), "调度器运行错误", err)
-			a.cancel() // 出错时取消所有组件
-		}
+		fmt.Println(err)
+		//if err != nil {
+		//	logger.Error(context.Background(), "调度器运行错误", err)
+		//	a.cancel() // 出错时取消所有组件
+		//}
 	}()
 
 	//// 启动编码器
@@ -78,11 +77,11 @@ func (a *Runcher) Run() error {
 	//}()
 
 	// 监控上下文取消
-	go func() {
-		<-a.ctx.Done()
-		logger.Info(context.Background(), "接收到取消信号，准备关闭Runcher...")
-		close(a.down)
-	}()
+	//go func() {
+	//	<-a.ctx.Done()
+	//	logger.Info(context.Background(), "接收到取消信号，准备关闭Runcher...")
+	//	close(a.down)
+	//}()
 
 	logger.Info(context.Background(), "Runcher启动成功")
 	return nil
@@ -93,25 +92,25 @@ func (a *Runcher) Close() error {
 	logger.Info(context.Background(), "开始关闭Runcher...")
 
 	// 发送取消信号
-	a.cancel()
-
-	// 设置超时上下文
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// 等待关闭或超时
-	done := make(chan struct{})
-	go func() {
-		a.wg.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		// 正常关闭
-	case <-ctx.Done():
-		logger.Warn(context.Background(), "Runcher关闭超时")
-	}
+	//a.cancel()
+	//
+	//// 设置超时上下文
+	//ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	//defer cancel()
+	//
+	//// 等待关闭或超时
+	//done := make(chan struct{})
+	//go func() {
+	//	a.wg.Wait()
+	//	close(done)
+	//}()
+	//
+	//select {
+	//case <-done:
+	//	// 正常关闭
+	//case <-ctx.Done():
+	//	logger.Warn(context.Background(), "Runcher关闭超时")
+	//}
 
 	// 关闭组件
 	var errs []error

@@ -21,6 +21,8 @@ type ServerConfig struct {
 	Mode         string `json:"mode"` // debug, release
 	ReadTimeout  int    `json:"read_timeout"`
 	WriteTimeout int    `json:"write_timeout"`
+	RunnerRoot   string `json:"runner_root"`
+	IsDev        bool   `json:"is_dev"`
 }
 
 // DBConfig 数据库配置

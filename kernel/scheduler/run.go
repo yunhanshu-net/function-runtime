@@ -2,7 +2,6 @@ package scheduler
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/nats-io/nats.go"
 	"github.com/yunhanshu-net/function-go/pkg/dto/request"
@@ -17,10 +16,69 @@ import (
 
 func (s *Scheduler) Run() error {
 
+	//functionSub, err := s.natsConn.Subscribe("function.run.>", func(msg *nats.Msg) {
+	//	ctx := context.WithValue(context.Background(), constants.TraceID, msg.Header.Get(constants.TraceID))
+	//	//logger.Infof(ctx, "function.run >%s uid:%s", msg.Subject, string(msg.Data))
+	//	//接收runner关闭
+	//	logger.Infof(ctx, "Got message: %s", string(msg.Data))
+	//	runner, err := runnerproject.NewRunner(msg.Header.Get("user"), msg.Header.Get("runner"), conf.GetRunnerRoot(), msg.Header.Get("version"))
+	//	if err != nil {
+	//		panic(err)
+	//	}
+	//
+	//	req := request.RunFunctionReq{
+	//		Method:  msg.Header.Get("method"),
+	//		Router:  msg.Header.Get("router"),
+	//		TraceID: msg.Header.Get(constants.TraceID),
+	//		Runner:  runner,
+	//		//BodyType: "string",
+	//	}
+	//	if req.IsMethodGet() {
+	//		req.UrlQuery = msg.Header.Get("url_query")
+	//	} else {
+	//		req.Body = string(msg.Data)
+	//		req.BodyType = "string"
+	//	}
+	//	rsp := nats.NewMsg(msg.Subject)
+	//	rsp.Header.Set("code", "0")
+	//	response, err := s.Request(ctx, &req)
+	//	if err != nil {
+	//		rsp.Header.Set("code", "-1")
+	//		rsp.Header.Set("msg", err.Error())
+	//		err = msg.RespondMsg(rsp)
+	//		if err != nil {
+	//			logger.Error(ctx, "request error", err)
+	//		}
+	//		return
+	//	}
+	//	for k, v := range response.MetaData {
+	//		rsp.Header.Set(k, fmt.Sprintf("%v", v))
+	//	}
+	//	marshal, err := json.Marshal(response)
+	//	if err != nil {
+	//		logger.Error(ctx, "response marshal error", err)
+	//		panic(err)
+	//	}
+	//	rsp.Data = marshal
+	//
+	//	err = msg.RespondMsg(rsp)
+	//	if err != nil {
+	//		logger.Error(ctx, "request error", err)
+	//		return
+	//	}
+	//})
+	//if err != nil {
+	//	return err
+	//}
+	//s.functionSub = functionSub
+
+	//todo 上面是旧版本
+
 	functionSub, err := s.natsConn.Subscribe("function.run.>", func(msg *nats.Msg) {
 		ctx := context.WithValue(context.Background(), constants.TraceID, msg.Header.Get(constants.TraceID))
 		//logger.Infof(ctx, "function.run >%s uid:%s", msg.Subject, string(msg.Data))
 		//接收runner关闭
+		logger.Infof(ctx, "Got message: %s", string(msg.Data))
 		runner, err := runnerproject.NewRunner(msg.Header.Get("user"), msg.Header.Get("runner"), conf.GetRunnerRoot(), msg.Header.Get("version"))
 		if err != nil {
 			panic(err)
@@ -41,7 +99,7 @@ func (s *Scheduler) Run() error {
 		}
 		rsp := nats.NewMsg(msg.Subject)
 		rsp.Header.Set("code", "0")
-		response, err := s.Request(ctx, &req)
+		err = s.RequestSync(ctx, &req)
 		if err != nil {
 			rsp.Header.Set("code", "-1")
 			rsp.Header.Set("msg", err.Error())
@@ -51,21 +109,26 @@ func (s *Scheduler) Run() error {
 			}
 			return
 		}
-		for k, v := range response.MetaData {
-			rsp.Header.Set(k, fmt.Sprintf("%v", v))
-		}
-		marshal, err := json.Marshal(response)
-		if err != nil {
-			logger.Error(ctx, "response marshal error", err)
-			panic(err)
-		}
-		rsp.Data = marshal
+		//for k, v := range response.MetaData {
+		//	rsp.Header.Set(k, fmt.Sprintf("%v", v))
+		//}
+		//marshal, err := json.Marshal(response)
+		//if err != nil {
+		//	logger.Error(ctx, "response marshal error", err)
+		//	panic(err)
+		//}
+		//rsp.Data = marshal
 
-		err = msg.RespondMsg(rsp)
-		if err != nil {
-			logger.Error(ctx, "request error", err)
-			return
-		}
+		//err = PushFunctionServer(rsp)
+		//if err != nil {
+		//	logger.Error(ctx, "push function server error", err)
+		//	panic(err)
+		//}
+		//err = msg.RespondMsg(rsp)
+		//if err != nil {
+		//	logger.Error(ctx, "request error", err)
+		//	return
+		//}
 	})
 	if err != nil {
 		return err
@@ -114,6 +177,9 @@ func (s *Scheduler) Run() error {
 
 		if subject == "addApis" {
 			s.AddApisByNats(ctx, msg)
+		}
+		if subject == "pushApis" {
+			s.PushApisByNats(ctx, msg)
 		}
 		if subject == "createProject" {
 			s.CreateProject(ctx, msg)
