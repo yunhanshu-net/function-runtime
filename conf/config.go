@@ -11,14 +11,16 @@ func GetRunnerRoot() string {
 	if root != "" {
 		return root
 	}
-	if config.Get().ServerConfig.RunnerRoot != "" {
-		return config.Get().ServerConfig.RunnerRoot
-	}
+
 	if os.Getenv("DEV_ROOT") != "" {
 		root = os.Getenv("DEV_ROOT")
 		return root
 	}
 
+	if config.Get().ServerConfig.RunnerRoot != "" {
+		root = config.Get().ServerConfig.RunnerRoot
+		return root
+	}
 	root = os.Getenv("RUNNER_ROOT")
 	return root
 }
