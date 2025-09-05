@@ -107,7 +107,6 @@ func Init() error {
 				Timeout: 20,
 			},
 		}
-
 		// 创建配置文件
 		file, err := os.Create(configPath)
 		if err != nil {
