@@ -15,9 +15,8 @@ type CodeApiCreateInfo struct {
 	Language       string `json:"language"`
 	Package        string `json:"package"`
 	AbsPackagePath string `json:"abs_package_path"`
-	//FilePath       string `json:"file_path"`
-	EnName string `json:"en_name"`
-	CnName string `json:"cn_name"`
+	EnName         string `json:"en_name"`
+	CnName         string `json:"cn_name"`
 
 	Msg    string `json:"msg"`
 	Status string `json:"status"`
