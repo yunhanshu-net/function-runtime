@@ -140,17 +140,18 @@ func (s *Scheduler) stopRunner(runner *runnerproject.Runner) error {
 
 // Close 关闭调度器
 func (s *Scheduler) Close() error {
+	//todo 这里要runner自己释放，不能强杀，因为runner可能还在处理任务，需要把释放权交给runner，优雅退出
 	//s.cancel()
 	//s.wg.Wait()
-	for unix, v := range s.runtimeRunners {
-		for _, r := range v.Running {
-			err := r.Close()
-			if err != nil {
-				logger.Errorf(context.Background(), "runner:%s close err:%s", unix, err.Error())
-			}
-			logger.Infof(context.Background(), "runner:%s close success", unix)
-		}
-	}
+	//for unix, v := range s.runtimeRunners {
+	//	for _, r := range v.Running {
+	//		err := r.Close()
+	//		if err != nil {
+	//			logger.Errorf(context.Background(), "runner:%s close err:%s", unix, err.Error())
+	//		}
+	//		logger.Infof(context.Background(), "runner:%s close success", unix)
+	//	}
+	//}
 	s.closeSub.Unsubscribe()
 	s.coderSub.Unsubscribe()
 	s.functionSub.Unsubscribe()

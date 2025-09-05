@@ -162,7 +162,7 @@ func (r *cmdRunner) connectNats(ctx context.Context, conn *nats.Conn) error {
 	//向runner发送消息
 
 	go func() {
-		_, cmd, err := cmdx.Run(ctx, runner.GetBinPath(), args)
+		cmd, err := cmdx.Launch(ctx, runner.GetBinPath(), args)
 		if err != nil {
 			logger.Errorf(ctx, "connect nats %s", err.Error())
 			return
