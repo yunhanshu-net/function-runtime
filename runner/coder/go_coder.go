@@ -710,36 +710,6 @@ func (g *GoCoder) AddApis(ctx context.Context, req *coder.AddApisReq) (resp *cod
 		logger.Errorf(ctx, "GoCoder.onAddApi err: %v resp:%+v", err, resp)
 		return nil, err
 	}
-	//此时需要回调
-	//for _, info := range resp.ApiChangeInfo.AddApi {
-	//	if info.CreateTables != nil {
-	//		var req0 usercall.Request
-	//		req0.Method = info.Method
-	//		req0.Router = info.Router
-	//		req0.Type = usercallConst.CallbackTypeOnCreateTables
-	//		call, err1 := g.UserCall(ctx, &req0)
-	//		if err1 != nil {
-	//			logger.Errorf(ctx, "GoCoder.UserCall(%+v) CallbackTypeOnCreateTables err: %v", req, err1)
-	//			continue
-	//		}
-	//		logger.Infof(ctx, "GoCoder.UserCall(%+v):CallbackTypeOnCreateTables success resp:%v", req, call)
-	//	}
-	//
-	//	if !slicesx.ContainsString(info.Callbacks, usercallConst.UserCallTypeOnApiCreated) {
-	//		logger.Infof(ctx, "api no callback:%s ", usercallConst.UserCallTypeOnApiCreated)
-	//		continue
-	//	}
-	//	var req1 usercall.Request
-	//	req1.Method = info.Method
-	//	req1.Router = info.Router
-	//	req1.Type = usercallConst.UserCallTypeOnApiCreated
-	//	call, err1 := g.UserCall(ctx, &req1)
-	//	if err1 != nil {
-	//		logger.Errorf(ctx, "GoCoder.UserCall(%+v) UserCallTypeOnApiCreated err: %v", req, err1)
-	//		continue
-	//	}
-	//	logger.Infof(ctx, "GoCoder.UserCall(%+v): success UserCallTypeOnApiCreated resp:%v", req, call)
-	//}
 	//此时发生了变更，需要重新编译，另外需要提交一下代码，保证可以及时回滚，
 	msg := GitCommitMsg{Version: diff.CurrentVersion, Msg: req.Msg}
 	git, err := InitGit(g)
