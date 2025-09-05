@@ -18,7 +18,6 @@ func Setup(c *nats.Conn) {
 }
 
 type HttpToNats struct {
-	//runcher *kernel.Runcher
 	natsConn *nats.Conn
 }
 
