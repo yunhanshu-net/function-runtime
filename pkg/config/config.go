@@ -62,7 +62,7 @@ func Init() error {
 	configPath := os.Getenv("CONFIG_PATH")
 	if configPath == "" {
 		// 默认配置文件路径
-		configPath = "configs/config.json"
+		configPath = "../configs/function-runtime.json"
 	}
 
 	// 确保目录存在
