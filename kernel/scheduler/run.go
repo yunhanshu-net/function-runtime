@@ -85,10 +85,11 @@ func (s *Scheduler) Run() error {
 		}
 
 		req := request.RunFunctionReq{
-			Method:  msg.Header.Get("method"),
-			Router:  msg.Header.Get("router"),
-			TraceID: msg.Header.Get(constants.TraceID),
-			Runner:  runner,
+			Method:     msg.Header.Get("method"),
+			Router:     msg.Header.Get("router"),
+			TraceID:    msg.Header.Get(constants.TraceID),
+			Runner:     runner,
+			NatsHeader: msg.Header,
 			//BodyType: "string",
 		}
 		if req.IsMethodGet() {

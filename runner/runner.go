@@ -312,7 +312,9 @@ func (r *cmdRunner) requestByNatsSync(ctx context.Context, runnerRequest *reques
 		return err
 	}
 	msg.Data = marshal
+	msg.Header = runnerRequest.NatsHeader
 	msg.Header.Set(constants.TraceID, runnerRequest.TraceID)
+
 	//respMsg, err := r.natsConn.RequestMsg(msg, time.Second*200)
 	err = r.natsConn.PublishMsg(msg)
 
